@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+!.env.example
+.venv
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+downloads/*
+!downloads/.gitkeep
+AGENTS.md
+docs/agents/
+tests/
+scripts/
