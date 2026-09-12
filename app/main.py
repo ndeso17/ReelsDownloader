@@ -36,6 +36,12 @@ async def main() -> None:
     logger.info("application built")
 
     application.bot_data["rate_limiter"] = UserRateLimiter(settings)
+    # T-111 (FR-010, NFR Reliability): semaphore dibangun PER-instance aplikasi
+    # (bukan module-level) agar tiap event-loop punya slot-nya sendiri; handler
+    # WP-11 baca lewat `bot_data.get("semaphore")` — fallback `_job` self-heal bila
+    # ditambahkan di luar `main()` (test langsung). `MAX_CONCURRENT_DOWNLOADS` dari
+    # env; production value = settings.max_concurrent_downloads.
+    application.bot_data["semaphore"] = asyncio.Semaphore(settings.max_concurrent_downloads)
     application.bot_data["settings"] = settings
 
     # WP-06: handler /start, /help, deteksi URL (FR-001..FR-003, FR-011).
