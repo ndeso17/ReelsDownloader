@@ -56,3 +56,6 @@ downloads/*.mp4
 downloads/*.tmp
 downloads/.*.part
 AGENTS.md
+
+## Agent workspace (local only)
+docs/agents/
