@@ -1,0 +1,10 @@
+# Pin versi = versi tervalidasi terpasang di .venv (lihat docs/agents/FINDINGS.md,
+# catatan T-014: PLAN menyebut versi lebih lama).
+python-telegram-bot==22.8
+yt-dlp==2026.8.19
+pydantic-settings==2.15.0
+
+# dev/test
+ruff==0.16.7
+pytest==9.1.1
+pytest-asyncio==1.4.0
