@@ -19,3 +19,4 @@ select = ["E", "F", "W", "I", "UP", "B", "S", "ASYNC"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
