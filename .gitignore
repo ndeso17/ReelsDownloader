@@ -59,3 +59,24 @@ AGENTS.md
 
 ## Agent workspace (local only)
 docs/agents/
+
+## WP-02 (T-021) — repo hygiene. APPEND ONLY: baris di atas (`.env*`, `AGENTS.md`,
+## `docs/agents/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`) tidak diubah.
+downloads/*
+!downloads/.gitkeep
+.mypy_cache/
+.ruff_cache
+.pytest_cache
+.coverage
+.coverage.*
+htmlcov/
+*.egg
+*.egg-info
+.eggs/
+*.tmp
+*.swo
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.history/

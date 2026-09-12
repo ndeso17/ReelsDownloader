@@ -28,9 +28,7 @@ async def main() -> None:
     configure_logging(settings.log_level)
 
     application = (
-        Application.builder()
-        .token(settings.telegram_bot_token.get_secret_value())
-        .build()
+        Application.builder().token(settings.telegram_bot_token.get_secret_value()).build()
     )
     logger.info("application built (no handlers registered yet, WP-01)")
 

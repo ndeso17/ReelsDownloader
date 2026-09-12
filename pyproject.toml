@@ -1,0 +1,21 @@
+# Konfigurasi tooling mutu (WP-02, T-023).
+# DEVIASI PLAN: `target-version` PLAN tulis "py311"; interpreter nyata .venv = Python 3.12.3
+# dan seluruh kode memakai sintaks 3.12, jadi dipasang "py312" (dilihat: Log WP-02).
+# Section `[project]` dengan `dependencies` SENGAJA tidak ditulis: sumber kebenaran pin versi
+# tetap requirements.txt (T-014 + AGENTS.md §5.3 larang dua sumber versi yang bisa drift).
+# BUG PLAN DI PERBAIKI DI SINI: `testpaths` diisi "tests" (bukan "tests/unit") agar
+# `pytest -q` dan `pytest tests/unit -q` sama-sama resolve tanpa collection error.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
