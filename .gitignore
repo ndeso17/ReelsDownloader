@@ -1,0 +1,58 @@
+# ReelsDownloader
+
+## .env files
+.env
+.env.*
+!.env.example
+
+## Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.github/
+.venv/
+venv/
+ENV/
+env/
+.venv
+
+## Local config
+.local
+config.json
+
+## IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+## Node (jika dipakai untuk test frontend nanti)
+node_modules/
+package-lock.json
+yarn.lock
+
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+## Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+## Misc
+downloads/*.mp4
+downloads/*.tmp
+downloads/.*.part
+AGENTS.md
