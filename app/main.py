@@ -12,6 +12,7 @@ import logging
 from telegram.ext import Application
 
 from app.config import get_settings
+from app.services.rate_limiter import UserRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,10 @@ async def main() -> None:
         Application.builder().token(settings.telegram_bot_token.get_secret_value()).build()
     )
     logger.info("application built (no handlers registered yet, WP-01)")
+
+    # T-055: satu instance rate limiter seumur hidup aplikasi, dibagikan ke handler
+    # WP-06 lewat bot_data (FR-011).
+    application.bot_data["rate_limiter"] = UserRateLimiter(settings)
 
     await application.initialize()
     await application.start()

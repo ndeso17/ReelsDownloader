@@ -35,3 +35,17 @@ class UploadError(Exception):
 
 class NetworkError(Exception):
     """Koneksi jaringan gagal (WP-05/WP-10)."""
+
+
+class RateLimitedError(Exception):
+    """Request ditolak: user mengirim lagi sebelum ``rate_limit_seconds`` lewat (FR-011).
+
+    ``retry_after`` = detik tersisa sampai user boleh mengirim lagi; dipakai
+    handler WP-06 untuk pesan "tunggu N detik".
+    """
+
+    retry_after: float
+
+    def __init__(self, retry_after: float) -> None:
+        super().__init__(f"Terlalu sering; coba lagi dalam {retry_after:.1f} detik")
+        self.retry_after = float(retry_after)
