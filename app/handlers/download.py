@@ -1,4 +1,4 @@
-"""Handler URL detection + dispatch (FR-003..FR-005, FR-007, FR-011)."""
+"""Handler URL detection + dispatch (FR-003..FR-005, FR-007, FR-009, FR-011)."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from pathlib import Path
 from telegram.ext import ContextTypes
 
 from app.services import downloader as downloader_service
-from app.services.errors import RateLimitedError, UploadError
+from app.services.errors import RateLimitedError, UploadError, user_message
 from app.services.uploader import send_video
 from app.services.validator import UnsupportedUrlError, extract_url, validate_url
-from app.utils.files import clean_dir
+from app.utils.files import clean_dir, sanitize_filename, sanitize_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +35,27 @@ async def _upload_after_download(
     chat_id: int,
     settings,
 ) -> None:
-    """T-087: setelah download sukses, kirim video ke Telegram."""
+    """T-087: setelah download sukses, kirim video ke Telegram.
+
+    T-104 (NFR Security): metadata + title dibersihkan lewat `sanitize_metadata`
+    / `sanitize_filename` (WP-07) SEBELUM dikirim, jadi control char atau judul
+    super panjang dari situs pihak ketiga tidak pernah masuk caption Telegram.
+    String pesan upload di bawah sudah dikunci test WP-06/WP-08/WP-09
+    (`tests/test_cleanup.py::test_cleanup_after_failed_upload`,
+    `tests/test_uploader.py::test_handler_replies_error_message_when_upload_fails`)
+    — tetap identik maknanya dengan `MSG_UPLOAD_FAILED` dari T-101.
+    """
+    safe_metadata = sanitize_metadata(result.metadata or {})
+    safe_title = sanitize_filename(str(safe_metadata.get("title") or ""))
     try:
         await send_video(
             bot=context.bot,
             chat_id=chat_id,
             file_path=result.path,
-            title=result.metadata.get("title") or "",
+            title=safe_title,
             url=url,
             max_file_size_mb=settings.max_file_size_mb,
-            metadata=result.metadata,
+            metadata=safe_metadata,
         )
     except UploadError as exc:
         logger.warning("upload gagal untuk %s: %s", url, exc)
@@ -88,8 +99,13 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
         try:
             result = await downloader_service.download(url, settings)
             await _upload_after_download(context, url, result, chat_id, settings)
-        except Exception:
+        except Exception as exc:
+            # T-103 (FR-009): log lengkap (traceback hanya ke log — AGENTS.md §5),
+            # chat user hanya pesan bersih hasil `user_message()`. Level ERROR
+            # dipertahankan karena test WP-06 `test_handlers.py` mengunci
+            # caplog.at_level(ERROR) untuk jalur ini; lihat Log WP-10.
             logger.exception("download job failed for %s", url)
+            await context.bot.send_message(chat_id=chat_id, text=user_message(exc))
         finally:
             # FR-008: sukses atau gagal, file sementara harus hilang. `clean_dir`
             # sinkron -> `asyncio.to_thread` (AGENTS.md §4.4). Cleanup gagal
