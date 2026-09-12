@@ -7,8 +7,12 @@ AGENTS.md §4.4 — pola yang sama dengan ``_run_download`` di WP-04.
 
 from __future__ import annotations
 
+import logging
 import re
+import time
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Blacklist WP-07. T-072 menulis `/ : \\ * ? " < > |` dan T-073 menulis set yang sama;
 # `:` ikut diganti `_` karena assert verbatim T-073 hanya terpenuhi untuk set itu.
@@ -56,3 +60,37 @@ def sanitize_metadata(meta: dict) -> dict:
         else:
             cleaned[key] = value
     return cleaned
+
+
+def safe_remove(path: Path) -> None:
+    """Hapus satu file bila ada (T-091, FR-008).
+
+    ``FileNotFoundError`` dianggap sukses (file sudah hilang = tujuan tercapai),
+    sehingga cleanup idempoten: aman dipanggil dua kali atau untuk path yang
+    sudah dihapus proses lain. ``OSError`` lain (mis. permission) tetap naik —
+    kegagalan nyata tidak boleh disembunyikan.
+    """
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+
+
+def ensure_clean_dir(directory: Path, max_age_seconds: float = 86400) -> None:
+    """Hapus file di *directory* yang lebih tua dari *max_age_seconds* (T-092, FR-008).
+
+    Default 1 hari. File baru tidak disentuh; subdirektori dilewati (hanya
+    "file" yang jadi scope cleanup). Path absen = tidak ada kerja.
+    """
+    if not directory.is_dir():
+        return
+    now = time.time()
+    for child in directory.iterdir():
+        if child.is_file():
+            try:
+                age = now - child.stat().st_mtime
+            except FileNotFoundError:
+                # Race: file hilang antara iterdir() dan stat() — sudah bersih.
+                continue
+            if age > max_age_seconds:
+                safe_remove(child)

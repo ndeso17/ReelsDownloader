@@ -7,11 +7,19 @@ kalau assert ini merah, yang salah implementasinya, bukan testnya (AGENTS.md §3
 
 from __future__ import annotations
 
+import os
+import time
 from pathlib import Path
 
 import pytest
 
-from app.utils.files import clean_dir, sanitize_filename, sanitize_metadata
+from app.utils.files import (
+    clean_dir,
+    ensure_clean_dir,
+    safe_remove,
+    sanitize_filename,
+    sanitize_metadata,
+)
 
 # 8 blacklisted chars: / : \ * ? " < > | (T-072 dan T-073 menyebut set yang sama).
 DANGEROUS = '/:*?\\"><>|'
@@ -100,3 +108,71 @@ def test_sanitize_metadata_keeps_non_string_values() -> None:
 
 def test_sanitize_metadata_returns_new_dict_empty_input() -> None:
     assert sanitize_metadata({}) == {}
+
+
+# ===== T-091: safe_remove (FR-008, WP-09) =====
+
+
+def test_safe_remove_removes_existing_file(tmp_path: Path) -> None:
+    f = tmp_path / "a.txt"
+    f.write_text("x")
+    safe_remove(f)
+    assert not f.exists()
+
+
+def test_safe_remove_silent_on_missing_file(tmp_path: Path) -> None:
+    f = tmp_path / "missing.txt"
+    # FileNotFoundError seharusnya ditelan tanpa raise.
+    safe_remove(f)
+    assert not f.exists()
+
+
+def test_safe_remove_raises_on_permission_error(tmp_path: Path) -> None:
+
+    f = tmp_path / "locked.txt"
+    f.write_text("data")
+    # Parent directory read-only so unlink can't update directory entry.
+    orig = tmp_path.stat().st_mode
+    tmp_path.chmod(0o555)
+    try:
+        with pytest.raises(OSError):
+            safe_remove(f)
+    finally:
+        tmp_path.chmod(orig)
+
+
+# ===== T-092: ensure_clean_dir (FR-008, WP-09) =====
+
+
+def test_ensure_clean_dir_removes_old_files_keeps_new(tmp_path: Path) -> None:
+    old = tmp_path / "old.mp4"
+    old.write_bytes(b"x")
+    # Backdate mtime 2 hari lalu.
+    old_ts = time.time() - 172800
+    os.utime(str(old), (old_ts, old_ts))
+
+    new = tmp_path / "new.mp4"
+    new.write_bytes(b"y")
+
+    ensure_clean_dir(tmp_path, max_age_seconds=86400)
+
+    assert not old.exists()
+    assert new.exists()
+
+
+def test_ensure_clean_dir_keeps_fresh_files_within_threshold(tmp_path: Path) -> None:
+    f = tmp_path / "fresh.mp4"
+    f.write_bytes(b"data")
+    ensure_clean_dir(tmp_path, max_age_seconds=86400)
+    assert f.exists()
+
+
+def test_ensure_clean_dir_ignores_subdirectories(tmp_path: Path) -> None:
+    subdir = tmp_path / "sub"
+    subdir.mkdir()
+    ensure_clean_dir(tmp_path, max_age_seconds=86400)
+    assert subdir.exists()
+
+
+def test_ensure_clean_dir_empty_dir_no_error(tmp_path: Path) -> None:
+    ensure_clean_dir(tmp_path, max_age_seconds=86400)

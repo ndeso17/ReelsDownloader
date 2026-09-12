@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
 from telegram.ext import ContextTypes
 
@@ -11,6 +12,7 @@ from app.services import downloader as downloader_service
 from app.services.errors import RateLimitedError, UploadError
 from app.services.uploader import send_video
 from app.services.validator import UnsupportedUrlError, extract_url, validate_url
+from app.utils.files import clean_dir
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +84,20 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     settings = bot_data["settings"]
 
     async def _job():
+        dl_dir = Path(settings.download_dir)
         try:
             result = await downloader_service.download(url, settings)
             await _upload_after_download(context, url, result, chat_id, settings)
         except Exception:
             logger.exception("download job failed for %s", url)
+        finally:
+            # FR-008: sukses atau gagal, file sementara harus hilang. `clean_dir`
+            # sinkron -> `asyncio.to_thread` (AGENTS.md §4.4). Cleanup gagal
+            # (mis. permission) hanya di-log; tidak boleh membunuh task (WP-10
+            # melengkapi pesan error user-facing).
+            try:
+                await asyncio.to_thread(clean_dir, dl_dir)
+            except OSError:
+                logger.warning("cleanup %s gagal", dl_dir, exc_info=True)
 
     asyncio.create_task(_job())
