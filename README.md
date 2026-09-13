@@ -88,6 +88,7 @@ Var bisa juga lewat `-e` satu per satu:
 ```bash
 docker run -d --name reelsdownloader --restart unless-stopped \
   -e TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
+  -e DOWNLOAD_DIR=/app/downloads \
   -e MAX_CONCURRENT_DOWNLOADS=2 \
   -e MAX_FILE_SIZE_MB=50 \
   -e RATE_LIMIT_SECONDS=10 \
