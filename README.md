@@ -1,10 +1,10 @@
-# ReelsDownloader — Telegram Reels Downloader (Instagram / Facebook)
+# ReelsDownloader Telegram Reels Downloader (Instagram / Facebook)
 
 Bot Telegram MVP: kirim URL video **publik** Instagram atau Facebook, bot
 memvalidasi domain, mengunduh dengan `yt-dlp` (FFmpeg merge lewat yt-dlp),
 mengirim video balik dengan caption, lalu menghapus file sementara.
 
-Tanpa database, tanpa Redis, tanpa worker, tanpa login Instagram/Facebook —
+Tanpa database, tanpa Redis, tanpa worker, tanpa login Instagram/Facebook
 itu scope V2 (PRD §6/§7). Koncurrency di-handle `asyncio.Semaphore` in-process.
 
 Stack: Python 3.11+ (dev/image: 3.12), `python-telegram-bot` 22.8,
@@ -196,7 +196,7 @@ Masalah umum lain:
 
 ## Batasan
 
-Sesuai PRD §6 (Not Included) — bukan bug, memang di luar MVP:
+Sesuai PRD §6 (Not Included) bukan bug, memang di luar MVP:
 
 - Tanpa database, tanpa akun user, tanpa riwayat download persisten, tanpa
   quota/statistik, tanpa admin dashboard, tanpa pembayaran.
