@@ -59,7 +59,7 @@ async def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_handler))
 
-    # WP-15: handler akses v2.2 — `/getID`, `/menu`, `/setUser` (FR-012, FR-014, FR-016).
+    # WP-15: handler akses v2.2: `/getID`, `/menu`, `/setUser` (FR-012, FR-014, FR-016).
     application.add_handler(CommandHandler("getID", get_id))
     application.add_handler(CommandHandler("menu", menu))
     application.add_handler(CommandHandler("setUser", set_user))
