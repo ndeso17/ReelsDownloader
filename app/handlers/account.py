@@ -39,7 +39,10 @@ from app.services.access import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["get_id", "menu", "set_user", "write_lock_for"]
+__all__ = ["get_id", "menu", "set_user", "stats", "write_lock_for"]
+
+#: T-165 (FR-020, SC 18): pemisah rincian alasan penolakan pada keluaran `/stats`.
+_STATS_REASON_SEPARATOR = ", "
 
 #: Kunci cadangan per jalur berkas whitelist, dipakai bila `bot_data` tidak menyediakan
 #: `access_lock` (mis. test yang membangun `context` manual). `dict.setdefault` atomik
@@ -84,6 +87,65 @@ async def menu(update, context: ContextTypes.DEFAULT_TYPE) -> None:
     users = context.bot_data.get("users", {})
     text = menu_text(settings, _user_id_of(update), users)
     await update.effective_message.reply_text(text)
+
+
+def _queue_line(context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Baris kedalaman antrean `/stats` (FR-020, SC 18) dengan fallback WP-17.
+
+    Antrean `asyncio.Queue` (FR-022) baru dibuat di WP-17, jadi `bot_data` belum
+    tentu punya kunci `queue`: fallback PLAN T-165 dipakai selama itu, sehingga WP
+    ini bisa diaudit tanpa menunggu WP-17. `qsize()` divaluasi dalam try/except
+    agar objek pengganti yang tidak terduga tidak menggagalkan laporan.
+    """
+    queue = context.bot_data.get("queue")
+    if queue is None:
+        return "Antrean: n/a (belum diwiring)"
+    try:
+        depth = int(queue.qsize())
+    except Exception:  # pragma: no cover - penjaga objek antrean tak terduga
+        logger.warning("qsize() antrean tidak terbaca", exc_info=True)
+        return "Antrean: n/a (belum diwiring)"
+    max_size = getattr(context.bot_data["settings"], "queue_max_size", "?")
+    return f"Antrean: {depth}/{max_size}"
+
+
+def _stats_text(context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Susun laporan `/stats` dari state statistik + antrean saat ini (SC 18).
+
+    Kontrak persistensi = keputusan Executor di `app/services/stats.py` (lihat Log
+    WP-16): `User unik` bertahan antar restart (dibaca dari `stats.json`), sedangkan
+    `Diproses`/`Ditolak` adalah counter SEJAK RESTART. Label menyebut status itu
+    eksplisit supaya angkanya tidak dibaca sebagai total sepanjang masa.
+    """
+    stats_service = context.bot_data.get("stats")
+    if stats_service is None:
+        # Jalur defensif (mis. test lama yang membangun bot_data manual).
+        return "📊 Statistik belum tersedia."
+    snap = stats_service.snapshot()
+    reasons = snap["rejected_reasons"]
+    detail = ", ".join(f"{key}={reasons[key]}" for key in sorted(reasons)) or "-"
+    return (
+        "📊 Statistik pemakaian\n"
+        f"User unik: {snap['total_users']}\n"
+        f"Diproses (sejak restart): {snap['processed']}\n"
+        f"Ditolak (sejak restart): {snap['rejected']}\n"
+        f"Rincian ditolak: {detail}\n"
+        f"{_queue_line(context)}"
+    )
+
+
+async def stats(update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """T-165 (FR-020, SC 18): `/stats` hanya untuk admin (`access.is_owner`).
+
+    Guard mengikuti pola `/setUser`: selain owner -> `MSG_ACCESS_DENIED` standar,
+    tanpa membocorkan ada/tidaknya statistik. Mode publik pun tetap terbatas
+    (PRD FR-021: "di public mode tetap dibatasi ke admin").
+    """
+    settings = context.bot_data["settings"]
+    if not is_owner(_user_id_of(update), settings):
+        await update.effective_message.reply_text(MSG_ACCESS_DENIED)
+        return
+    await update.effective_message.reply_text(_stats_text(context))
 
 
 def _label_of(update, user_id: int) -> str:

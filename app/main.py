@@ -14,9 +14,11 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from app.config import get_settings
 from app.handlers.account import get_id, menu, set_user
+from app.handlers.account import stats as stats_command
 from app.handlers.download import download_handler
 from app.handlers.start import help_command, start
 from app.services.rate_limiter import UserRateLimiter
+from app.services.stats import Stats
 from app.services.user_store import load_users
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,27 @@ def configure_logging(level: str) -> None:
         level=getattr(logging, level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+
+async def _flush_stats(application) -> None:
+    """T-166 (FR-021): persist statistik saat aplikasi dimatikan.
+
+    `Stats.save` sudah tidak pernah raise (pola WP-15) dan I/O sinkron dibungkus
+    `asyncio.to_thread` (AGENTS.md §4.4). Statistik yang tidak bisa disimpan tidak
+    boleh menghentikan shutdown, jadi kegagalan hanya di-log oleh `Stats.save`.
+    Bila `settings` tidak punya `stats_file` (`getattr(..., None)` → `None`), flush
+    dilewati supaya test lama tidak menulis ke CWD. `model_construct()` default
+    stats_file = `"stats.json"`, jadi kalau dipakai eksplisit akan menulis ke cwd
+    (itu sengaja dibuat exception di bawah agar terdeteksi saat regression).
+    """
+    stats_service = application.bot_data.get("stats")
+    if stats_service is None:
+        return
+    stats_file = getattr(application.bot_data.get("settings"), "stats_file", None)
+    if stats_file is None:
+        logger.debug("settings tanpa stats_file, flush stats dilewati")
+        return
+    await asyncio.to_thread(stats_service.save, stats_file)
 
 
 async def main() -> None:
@@ -44,6 +67,14 @@ async def main() -> None:
     # lama tanpa field v2.2 (test WP-06/WP-10) supaya startup tidak berubah.
     users_file = getattr(settings, "users_file", None) or "users.json"
     application.bot_data["users"] = load_users(users_file)
+
+    # T-166 (FR-021): muat-or-buat statistik pemakaian SEBELUM handler diregistrasi,
+    # supaya `/start` pertama sudah bisa mencatat user unik. `Stats.load` tidak pernah
+    # raise (file hilang/rusak -> nol + warning), jadi startup bot tidak bisa gagal
+    # karena statistik (NFR Reliability). getattr = pola fallback yang sama dengan
+    # users_file di atas untuk Settings/model_construct lama tanpa field v2.2.
+    stats_file = getattr(settings, "stats_file", None) or "stats.json"
+    application.bot_data["stats"] = Stats.load_or_new(stats_file)
 
     application.bot_data["rate_limiter"] = UserRateLimiter(settings)
     # T-111 (FR-010, NFR Reliability): semaphore dibangun PER-instance aplikasi
@@ -64,8 +95,22 @@ async def main() -> None:
     application.add_handler(CommandHandler("menu", menu))
     application.add_handler(CommandHandler("setUser", set_user))
 
+    # T-166 (FR-020): handler `/stats` admin. `menu`/`help` tetap tidak menyebut
+    # `/stats` di teksnya agar konsisten (teks tertanam di `app/handlers/start.py`,
+    # `app/services/access.py`).
+    application.add_handler(CommandHandler("stats", stats_command))
+
     await application.initialize()
     await application.start()
+    # T-166 (FR-021): pasang callback persistensi statistik (pola PLAN: post_shutdown).
+    # Catatan fakta ptb 22.8 (dibaca lewat inspect): `Application.post_shutdown` hanya
+    # dipanggil oleh `run_polling()`/`run_webhook()`, TIDAK oleh `Application.shutdown()`
+    # (docstring: "Does *not* call :attr:`post_shutdown`"), dan `main()` di bawah
+    # menjalankan siklus manual. Flush shutdown karena itu bersifat belt-and-braces:
+    # kolom yang benar-benar persist (`first_seen`) sudah di-flush atomik tepat saat
+    # usernya tercatat di `app/handlers/start.py`, sementara `processed`/`rejected`
+    # memang counter sejak-restart (keputusan Executor, lihat Log WP-16).
+    application.post_shutdown = _flush_stats
     # T-156 (FR-016): daftar command Telegram disinkronkan dengan menu v2.2
     # (set_my_commands butuh bot ter-initialize; bukan jalur request). Sinkronisasi
     # ini bukan jalur kritis: gagal (mis. token/network) hanya di-log, bot tetap

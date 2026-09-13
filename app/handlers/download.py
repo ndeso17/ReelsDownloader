@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes
 from app.services import downloader as downloader_service
 from app.services.access import MSG_ACCESS_DENIED, can_download
 from app.services.errors import RateLimitedError, UploadError, user_message
+from app.services.stats import Stats
 from app.services.uploader import send_video
 from app.services.validator import UnsupportedUrlError, extract_url, validate_url
 from app.utils.files import clean_dir, sanitize_filename, sanitize_metadata
@@ -29,14 +30,42 @@ _START_TEXT = (
 )
 
 
+def _stats_of(bot_data: dict) -> Stats | None:
+    """T-164 (FR-021): ambil stats secara defensif.
+
+    `bot_data` buatan test lama WP-06..WP-10 tidak punya kunci `stats`, jadi
+    `None` berarti pencatatan dilewati (bukan error).
+    """
+    return bot_data.get("stats")
+
+
+def _stats_reject(bot_data: dict, reason: str) -> None:
+    """T-164: hitung satu penolakan nyata; no-op bila stats belum diwiring."""
+    stats = _stats_of(bot_data)
+    if stats:
+        stats.inc_rejected(reason)
+
+
+def _stats_processed(bot_data: dict) -> None:
+    """T-164: hitung satu permintaan yang selesai diunggah; no-op bila tak ada stats."""
+    stats = _stats_of(bot_data)
+    if stats:
+        stats.inc_processed()
+
+
 async def _upload_after_download(
     context: ContextTypes.DEFAULT_TYPE,
     url: str,
     result: downloader_service.DownloadResult,
     chat_id: int,
     settings,
-) -> None:
+) -> bool:
     """T-087: setelah download sukses, kirim video ke Telegram.
+
+    T-164 (FR-021): kini mengembalikan `bool` (sukses/kegagalan upload) supaya
+    `_job` bisa memisahkan "diproses" dari "gagal total". Teks balasan, urutan
+    pemanggilan, dan cakupan `except` TIDAK berubah sedikit pun: nilai balik baru
+    hanya dipakai pencatatan statistik defensif.
 
      T-104 (NFR Security): metadata + title dibersihkan lewat `sanitize_metadata`
      / `sanitize_filename` (WP-07) SEBELUM dikirim, jadi control char atau judul
@@ -61,9 +90,12 @@ async def _upload_after_download(
     except UploadError as exc:
         logger.warning("upload gagal untuk %s: %s", url, exc)
         await context.bot.send_message(chat_id=chat_id, text="⚠️ Gagal mengirim video ke Telegram.")
+        return False
     except Exception:
         logger.exception("upload job error: %s", url)
         await context.bot.send_message(chat_id=chat_id, text="⚠️ Gagal mengirim video.")
+        return False
+    return True
 
 
 async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
@@ -76,6 +108,8 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     settings = bot_data["settings"]
     user_id = update.effective_user.id if update.effective_user else None
     if not can_download(user_id, settings, bot_data.get("users", {})):
+        # T-164 (FR-021): penolakan nyata, bukan sekadar teks tanpa URL.
+        _stats_reject(bot_data, "access_denied")
         await update.effective_message.reply_text(MSG_ACCESS_DENIED)
         return
 
@@ -84,12 +118,15 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
 
     url = extract_url(update.message.text)
     if url is None:
+        # PLAN T-164: teks tanpa URL BUKAN penolakan (hanya minta ulang), jadi
+        # sengaja tidak dihitung di stats.
         await update.message.reply_text(_START_TEXT)
         return
 
     try:
         url = validate_url(url)
     except UnsupportedUrlError as exc:
+        _stats_reject(bot_data, "unsupported_url")
         await update.message.reply_text(str(exc))
         return
 
@@ -99,6 +136,7 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await rate_limiter.acquire(chat_id)
     except RateLimitedError as exc:
+        _stats_reject(bot_data, "rate_limited")
         await update.message.reply_text(str(exc))
         return
 
@@ -125,8 +163,16 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
         async with semaphore:
             try:
                 result = await downloader_service.download(url, settings)
-                await _upload_after_download(context, url, result, chat_id, settings)
+                uploaded = await _upload_after_download(context, url, result, chat_id, settings)
+                # T-164 (FR-021): hanya upload yang benar-benar tersampaikan yang
+                # dihitung "diproses"; kegagalan download maupun upload masuk
+                # `download_failed`. Tidak ada perubahan aliran/teks di atas.
+                if uploaded:
+                    _stats_processed(bot_data)
+                else:
+                    _stats_reject(bot_data, "download_failed")
             except Exception as exc:
+                _stats_reject(bot_data, "download_failed")
                 # T-103 (FR-009): log lengkap (traceback hanya ke log: AGENTS.md §5),
                 # chat user hanya pesan bersih hasil `user_message()`. Level ERROR
                 # dipertahankan karena test WP-06 `test_handlers.py` mengunci
