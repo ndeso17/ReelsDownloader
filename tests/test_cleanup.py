@@ -1,14 +1,14 @@
 """Integrasi WP-09 (T-091/T-092/T-093, FR-008, SC §8 butir 5): cleanup file sementara.
 
 Handler `download.py` wajib menghapus file di `download_dir` SETELAH upload
-sukses MAUPUN gagal (blok `finally` — AGENTS.md §5 garis merah terakhir).
+sukses MAUPUN gagal (blok `finally`, AGENTS.md §5 garis merah terakhir).
 `clean_dir` asli dibiarkan jalan; assert langsung `list(dl_dir.iterdir()) == []`
 pada KEDUA jalur (PLAN T-093). Hanya `downloader_service.download` +
-`send_video` yang di-mock — tidak ada network (AGENTS.md §4.6).
+`send_video` yang di-mock, tidak ada network (AGENTS.md §4.6).
 
-Deviasi dari teks PLAN (dicatat di Log WP-09): T-093 menyebut `upload_video` —
+Deviasi dari teks PLAN (dicatat di Log WP-09): T-093 menyebut `upload_video`
 nama nyata di kode = `send_video` (WP-08); `get_settings().download_dir_path()`
-tidak ada di `app/config.py` — dipakai `Path(settings.download_dir)` dari
+tidak ada di `app/config.py`, dipakai `Path(settings.download_dir)` dari
 fixture `settings` (tmp_path), sama seperti pola WP-06/WP-08.
 """
 
@@ -78,7 +78,7 @@ def _make_context(bot, settings) -> MagicMock:
 
 
 def _seed_video(download_dir: Path) -> Path:
-    """File sementara di download_dir — meniru hasil kerja yt-dlp."""
+    """File sementara di download_dir, meniru hasil kerja yt-dlp."""
     video = download_dir / "abc123.mp4"
     video.write_bytes(b"x" * 1024)
     return video
@@ -87,7 +87,7 @@ def _seed_video(download_dir: Path) -> Path:
 def _assert_dir_empty(download_dir: Path) -> None:
     """Assert FR-008/SC §8 butir 5: tidak ada file tersisa.
 
-    Helper sinkron — assertion I/O tidak di inline coroutine (ruff ASYNC240;
+    Helper sinkron, assertion I/O tidak di inline coroutine (ruff ASYNC240;
     jalur produksi sudah memakai asyncio.to_thread, lihat AGENTS.md §4.4).
     """
     assert list(download_dir.iterdir()) == []

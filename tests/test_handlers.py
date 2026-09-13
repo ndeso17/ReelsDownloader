@@ -1,4 +1,4 @@
-"""Test handler WP-06 (T-065..T-067, FR-001..FR-003, FR-011) — tanpa network.
+"""Test handler WP-06 (T-065..T-067, FR-001..FR-003, FR-011), tanpa network.
 
 Semua update/context/bot adalah MagicMock/AsyncMock; tidak ada panggilan
 Telegram dan `downloader.download` selalu di-patch (AGENTS.md §4.6).
@@ -64,7 +64,7 @@ def settings(tmp_path) -> Settings:
 
 @pytest.fixture
 def rl() -> UserRateLimiter:
-    """Limiter dengan jam frozen 0.0 — deterministik, tanpa freezegun (T-054 rule)."""
+    """Limiter dengan jam frozen 0.0, deterministik, tanpa freezegun (T-054 rule)."""
     limiter = UserRateLimiter(10)
     limiter.time_source = lambda: 0.0
     return limiter
@@ -74,7 +74,7 @@ def reply_texts(update: MagicMock) -> list[str]:
     return [c.args[0] for c in update.message.reply_text.call_args_list]
 
 
-# ---------------- T-062 /start (FR-001) — teks persis PRD ----------------
+# ---------------- T-062 /start (FR-001): teks persis PRD ----------------
 
 
 async def test_start_text_matches_prd_fr001():

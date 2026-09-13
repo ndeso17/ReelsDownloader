@@ -2,10 +2,10 @@
 
 Aturan yang mengikat modul ini (AGENTS.md):
 - §4.2: semua import top-level. §4.4: fungsi publik `async def`.
-- §5: tanpa secret; tidak ada I/O — murni state in-memory.
+- §5: tanpa secret; tidak ada I/O, murni state in-memory.
 
 Jam dibaca lewat ``self.time_source`` (default ``time.time``) yang BISA
-di-patch per-instance — test monkeypatch `rl.time_source = lambda: t`
+di-patch per-instance, test monkeypatch `rl.time_source = lambda: t`
 (`freezegun` DILARANG: tidak ada di requirements, WP dilarang menambah deps).
 
 Satu instance dibangun di bootstrap `app/main.py` dan dibagikan lewat

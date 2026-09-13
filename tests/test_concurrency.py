@@ -1,6 +1,6 @@
-"""Tests WP-11 — concurrency semaphore + ack < 2 dtk + reliability (T-114..T-116).
+"""Tests WP-11, concurrency semaphore + ack < 2 dtk + reliability (T-114..T-116).
 
-Synchronisasi pakai `asyncio.Event` (BUKAN `sleep`) supaya deterministik —
+Synchronisasi pakai `asyncio.Event` (BUKAN `sleep`) supaya deterministik
 sesuai risiko "timing test flaky" di PLAN WP-11. Semua bot method AsyncMock;
 `downloader.download` selalu di-patch (AGENTS.md §4.6, tanpa network).
 """
@@ -116,7 +116,7 @@ class JobCollector:
         return patch.object(download_mod.asyncio, "create_task", side_effect=self)
 
     async def drain(self) -> None:
-        """Tunggu semua job yang direkam — `asyncio.timeout` (ruff ASYNC109)."""
+        """Tunggu semua job yang direkam, `asyncio.timeout` (ruff ASYNC109)."""
         async with asyncio.timeout(DRAIN_SECONDS):
             await asyncio.gather(*self.tasks)
 
@@ -126,7 +126,7 @@ def gated_download(
     entered: list[asyncio.Event],
     release: list[asyncio.Event],
 ) -> AsyncMock:
-    """Mock `download()` yang menunggu izin per-job — bukti titik masuk slot."""
+    """Mock `download()` yang menunggu izin per-job, bukti titik masuk slot."""
 
     async def _dl(url: str, _settings: Settings) -> DownloadResult:
         slot = len([e for e in entered if e.is_set()])
@@ -226,7 +226,7 @@ async def test_handler_acks_in_under_two_seconds_with_10s_download(settings, rl)
 
     `download()` mock menunggu `asyncio.Event` yang baru dilepas di akhir test,
     jadi 10 detik pekerjaan berat tidak pernah benar-benar ditunggu. Pengukuran
-    hanya membungkus `await download_handler(...)` — tidak ada `sleep`.
+    hanya membungkus `await download_handler(...)`, tidak ada `sleep`.
     """
     hold = asyncio.Event()  # diset di akhir test; job tidak pernah jalan 10 dtk
     entered = [asyncio.Event() for _ in range(1)]
@@ -248,7 +248,7 @@ async def test_handler_acks_in_under_two_seconds_with_10s_download(settings, rl)
         await download_handler(update, context)
         elapsed = time.monotonic() - started
 
-        assert elapsed < 2.0, f"handler return {elapsed:.3f}s — melanggar ack < 2 dtk"
+        assert elapsed < 2.0, f"handler return {elapsed:.3f}s, melanggar ack < 2 dtk"
         assert reply_texts(update) == [ACK_TEXT]
         # ack mendahului pekerjaan berat: job di-spawn tapi download belum mulai
         assert not entered[0].is_set()
@@ -348,7 +348,7 @@ async def test_one_failing_url_does_not_crash_the_loop(settings, rl, caplog):
 
 
 async def test_queue_survives_failure_and_frees_slot(settings, rl):
-    """Gagal di dalam slot harus melepas semaphore — slot tidak pernah bocor."""
+    """Gagal di dalam slot harus melepas semaphore, slot tidak pernah bocor."""
     semaphore = asyncio.Semaphore(1)
     collector = JobCollector()
 
@@ -390,7 +390,7 @@ async def test_cleanup_never_wipes_a_concurrent_job_file(settings, rl):
     Bila `clean_dir` berada di luar `async with semaphore:`, job yang selesai
     lebih dulu akan mengosongkan `download_dir` selagi job lain masih memakai
     slot yang sama -> file hasil download job kedua terhapus sebelum sempat
-    di-upload (`FileNotFoundError` — kegagalan nyata pada implementasi pertama).
+    di-upload (`FileNotFoundError`, kegagalan nyata pada implementasi pertama).
     Urutan yang dikunci: B tidak menyentuh `download()` sampai A melepas slot
     beserta cleanup-nya.
     """

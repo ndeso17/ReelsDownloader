@@ -1,8 +1,8 @@
 """Satu-satunya rumah exception domain (T-041, WP-04).
 
 Semua nama di modul ini dipakai ulang oleh WP-05/WP-08/WP-10 dan DILARANG
-didefinisikan ulang di modul lain. Semuanya subclass ``Exception`` langsung —
-bukan bertingkat — supaya `except DownloadFailedError` tidak diam-diam
+didefinisikan ulang di modul lain. Semuanya subclass ``Exception`` langsung
+bukan bertingkat, supaya `except DownloadFailedError` tidak diam-diam
 menangkap varian spesifik.
 """
 
@@ -54,50 +54,50 @@ class RateLimitedError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# T-101 (WP-10, FR-009) — mapping exception -> pesan user-facing.
+# T-101 (WP-10, FR-009): mapping exception -> pesan user-facing.
 #
 # Nama exception pada PLAN T-101 (`FileSizeExceededError`, `RateLimitError`,
 # `FfmpegFailedError`, `TimeoutErrorUser`) tidak didefinisikan ulang di sini:
 # docstring modul ini + AGENTS.md §4.2 mewajibkan satu rumah nama, dan kelas
 # WP-04/WP-05 (`FileTooLargeError`, `RateLimitedError`, `FFmpegFailedError`)
-# sudah dipakai `downloader.py`/`uploader.py`/`rate_limiter.py` — file yang
+# sudah dipakai `downloader.py`/`uploader.py`/`rate_limiter.py`: file yang
 # bukan bagian daftar File WP-10. Pemetaan tetap satu-persatu ke 9 kondisi
 # PRD §9; `TimeoutErrorUser` (opsional di PLAN) tidak dibuat karena
 # `asyncio.TimeoutError` = `TimeoutError` di Python 3.12 dan sudah naik apa
 # adanya dari `downloader.download` (lihat test_downloader.py T-046).
 # ---------------------------------------------------------------------------
 
-#: FR-009 #2 — URL di luar whitelist Instagram/Facebook.
+#: FR-009 #2: URL di luar whitelist Instagram/Facebook.
 MSG_URL_UNSUPPORTED = "❌ URL tidak didukung. Kirim link Instagram/Facebook."
 
-#: FR-009 #1 — URL tidak bisa diparse / bukan URL.
+#: FR-009 #1: URL tidak bisa diparse / bukan URL.
 MSG_URL_INVALID = "❌ URL tidak valid"
 
-#: FR-009 #4 — privat / butuh login / age-restricted.
+#: FR-009 #4: privat / butuh login / age-restricted.
 MSG_PRIVATE = "🔒 Video private/terbatas."
 
-#: FR-009 #3 — tidak ditemukan / sudah dihapus.
+#: FR-009 #3: tidak ditemukan / sudah dihapus.
 MSG_NOT_FOUND = "🔍 Video tidak ditemukan."
 
-#: FR-009 #6 — gagal unduh yang tidak terklasifikasi.
+#: FR-009 #6: gagal unduh yang tidak terklasifikasi.
 MSG_DOWNLOAD_FAILED = "⚠️ Gagal mengunduh."
 
-#: FR-009 #7 — FFmpeg merge/konversi gagal.
+#: FR-009 #7: FFmpeg merge/konversi gagal.
 MSG_FFMPEG_FAILED = "⚠️ Gagal memproses video."
 
-#: FR-009 #8 — melebihi MAX_FILE_SIZE_MB.
+#: FR-009 #8: melebihi MAX_FILE_SIZE_MB.
 MSG_FILE_TOO_LARGE = "📏 File terlalu besar."
 
-#: FR-009 #9 — upload Telegram gagal.
+#: FR-009 #9: upload Telegram gagal.
 MSG_UPLOAD_FAILED = "⚠️ Gagal mengirim ke Telegram."
 
-#: FR-009 #9 (kondisi 9) — hard-cap waktu terlampaui.
+#: FR-009 #9 (kondisi 9): hard-cap waktu terlampaui.
 MSG_TIMEOUT = "⏱️ Timeout."
 
 #: Jaringan: di luar 9 kondisi PRD §9, tapi punya exception domain sendiri.
 MSG_NETWORK_FAILED = "⚠️ Gagal terhubung ke internet. Coba lagi."
 
-#: Jaring terakhir — T-103: pesan apa pun harus bersih, tanpa isi exception.
+#: Jaring terakhir: T-103: pesan apa pun harus bersih, tanpa isi exception.
 MSG_GENERIC = "⚠️ Terjadi kesalahan. Coba lagi sebentar lagi."
 
 
@@ -105,7 +105,7 @@ def user_message(exc: Exception) -> str:
     """Pesan ramah user untuk satu exception (FR-009, T-101).
 
     Pemetaan eksplisit per kelas, berurutan; bukan `str(exc)` supaya detail
-    internal (pesan yt-dlp, path, traceback) tidak pernah sampai ke chat —
+    internal (pesan yt-dlp, path, traceback) tidak pernah sampai ke chat
     AGENTS.md §5: traceback lengkap hanya ke log. Exception tak dikenal jatuh
     ke `MSG_GENERIC`.
     """

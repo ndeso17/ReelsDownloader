@@ -1,9 +1,9 @@
-# Dockerfile — ReelsDownloader MVP (WP-13)
+# Dockerfile: ReelsDownloader MVP (WP-13)
 #
 # Kontrak: AGENTS.md §2 (Python 3.11+, FFmpeg dipakai yt-dlp, config dari env),
 # PRD §4/§5 (6 env var), §7 NFR Reliability + Security, Struktur.md.
 #
-# MANUAL-VERIFY (Docker) — SC PRD §8 butir 9 ("jalan 24/7 di VPS") TIDAK bisa
+# MANUAL-VERIFY (Docker): SC PRD §8 butir 9 ("jalan 24/7 di VPS") TIDAK bisa
 # diotomasi, jadi dijalankan manusia dengan resep ini lalu dicatat di
 # docs/agents/PLAN.md (bagian Log WP-13):
 #   1. docker build -t reelsdownloader:wp13 .                      -> exit 0
@@ -51,7 +51,7 @@ RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
 USER appuser
 
 # T-134: satu-satunya var yang di-set = DOWNLOAD_DIR (salah satu 6 var PRD §5).
-# 5 var lain, termasuk token, wajib dari `docker run -e` — tidak di-bake.
+# 5 var lain, termasuk token, wajib dari `docker run -e`: tidak di-bake.
 ENV DOWNLOAD_DIR=/app/downloads
 
 # AGENTS §2.7: folder hasil download sebagai volume agar artefak tidak hilang di layer.

@@ -1,6 +1,6 @@
 """Test utilitas file WP-07 (FR-008, NFR Security).
 
-Assert T-073 ditulis VERBATIM dari teks PLAN.md — jangan "dibetulkan" kalau gagal:
+Assert T-073 ditulis VERBATIM dari teks PLAN.md, jangan "dibetulkan" kalau gagal:
 kalau assert ini merah, yang salah implementasinya, bukan testnya (AGENTS.md §3.2
 "hapus/sunting test agar hijau" = dilarang).
 """

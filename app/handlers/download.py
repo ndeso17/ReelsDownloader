@@ -16,7 +16,7 @@ from app.utils.files import clean_dir, sanitize_filename, sanitize_metadata
 
 logger = logging.getLogger(__name__)
 
-#: FR-001 — minta URL ketika pengguna mengirim teks tanpa URL yang valid.
+#: FR-001: minta URL ketika pengguna mengirim teks tanpa URL yang valid.
 _START_TEXT = (
     "👋 Instagram/Facebook Downloader\n"
     "\n"
@@ -37,13 +37,13 @@ async def _upload_after_download(
 ) -> None:
     """T-087: setelah download sukses, kirim video ke Telegram.
 
-    T-104 (NFR Security): metadata + title dibersihkan lewat `sanitize_metadata`
-    / `sanitize_filename` (WP-07) SEBELUM dikirim, jadi control char atau judul
-    super panjang dari situs pihak ketiga tidak pernah masuk caption Telegram.
-    String pesan upload di bawah sudah dikunci test WP-06/WP-08/WP-09
-    (`tests/test_cleanup.py::test_cleanup_after_failed_upload`,
-    `tests/test_uploader.py::test_handler_replies_error_message_when_upload_fails`)
-    — tetap identik maknanya dengan `MSG_UPLOAD_FAILED` dari T-101.
+     T-104 (NFR Security): metadata + title dibersihkan lewat `sanitize_metadata`
+     / `sanitize_filename` (WP-07) SEBELUM dikirim, jadi control char atau judul
+     super panjang dari situs pihak ketiga tidak pernah masuk caption Telegram.
+     String pesan upload di bawah sudah dikunci test WP-06/WP-08/WP-09
+     (`tests/test_cleanup.py::test_cleanup_after_failed_upload`,
+     `tests/test_uploader.py::test_handler_replies_error_message_when_upload_fails`)
+    , tetap identik maknanya dengan `MSG_UPLOAD_FAILED` dari T-101.
     """
     safe_metadata = sanitize_metadata(result.metadata or {})
     safe_title = sanitize_filename(str(safe_metadata.get("title") or ""))
@@ -96,7 +96,7 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     # T-111/T-112 (FR-010): semaphore dibangun saat startup di `app/main.py` dan
     # dipakai ulang oleh semua job. `.get()` + fallback hanya untuk jalur pemanggilan
     # langsung (test unit WP-06/WP-08/WP-09/WP-10 membuat `bot_data` manual tanpa
-    # startup) — produksi selalu melewati `main()`, jadi limitnya efektif.
+    # startup): produksi selalu melewati `main()`, jadi limitnya efektif.
     semaphore: asyncio.Semaphore = bot_data.get("semaphore") or asyncio.Semaphore(
         settings.max_concurrent_downloads
     )
@@ -109,14 +109,14 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
         # SATU job = SATU slot utuh (download -> upload -> cleanup): `clean_dir`
         # adalah operasi destruktif pada direktori bersama, jadi tidak boleh jalan
         # sementara job lain masih menulis file parsial di sana. Teks PLAN T-112
-        # (`async with semaphore: await download(...)`) tetap terpenuhi — download
+        # (`async with semaphore: await download(...)`) tetap terpenuhi: download
         # ada di dalam slot; upload/cleanup ikut karena berbagi `download_dir`.
         async with semaphore:
             try:
                 result = await downloader_service.download(url, settings)
                 await _upload_after_download(context, url, result, chat_id, settings)
             except Exception as exc:
-                # T-103 (FR-009): log lengkap (traceback hanya ke log — AGENTS.md §5),
+                # T-103 (FR-009): log lengkap (traceback hanya ke log: AGENTS.md §5),
                 # chat user hanya pesan bersih hasil `user_message()`. Level ERROR
                 # dipertahankan karena test WP-06 `test_handlers.py` mengunci
                 # caplog.at_level(ERROR) untuk jalur ini; lihat Log WP-10.

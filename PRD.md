@@ -7,7 +7,7 @@
 **Backend:** Python
 **Downloader Engine:** yt-dlp
 **Media Processing:** FFmpeg
-**Penyimpanan User:** file JSON lokal (`users.json`) — tanpa database server
+**Penyimpanan User:** file JSON lokal (`users.json`), tanpa database server
 
 ---
 
@@ -22,13 +22,13 @@ Membangun Telegram Bot **penggunaan pribadi** yang memungkinkan user terdaftar m
 5. mengirim video kembali ke Telegram,
 6. menghapus file sementara setelah selesai.
 
-Bot memiliki **mode akses** yang diatur via `.env` (FR-013): **public** (default — semua user bisa download) atau **private** (hanya user dalam whitelist Telegram ID). Pada mode private, `/getID`, `/start`, `/menu` tetap publik; fitur download dan `/setUser` dikunci untuk user terdaftar.
+Bot memiliki **mode akses** yang diatur via `.env` (FR-013): **public** (default, semua user bisa download) atau **private** (hanya user dalam whitelist Telegram ID). Pada mode private, `/getID`, `/start`, `/menu` tetap publik; fitur download dan `/setUser` dikunci untuk user terdaftar.
 
 ### Alur Bisnis
 
 | # | Alur | Rujukan |
 |---|---|---|
-| 1 | User terdaftar mengirimkan link saja → diproses dengan aturan default (kualitas terbaik, video) — sama seperti v1.0 | FR-003, FR-005 |
+| 1 | User terdaftar mengirimkan link saja → diproses dengan aturan default (kualitas terbaik, video) - sama seperti v1.0 | FR-003, FR-005 |
 | 2 | User mengirimkan `/advance`, lalu mengirimkan link → dialog step-by-step: (a) pilih **Video atau Audio**, (b) pilih **kualitas** sesuai pilihan langkah (a), lalu proses | FR-015..FR-018 |
 | 3 | User mengirimkan `/start` → welcome message + daftar menu yang tersedia | FR-001 |
 | 4 | User mengirimkan `/getID` → bot merespons Telegram user ID pengirim | FR-012 |
@@ -130,7 +130,7 @@ Dukungan aktual bergantung pada extractor yt-dlp dan perubahan platform.
 
 ## 3. Functional Requirements
 
-### FR-001 — Start
+### FR-001: Start
 
 Bot harus merespons:
 
@@ -153,7 +153,7 @@ Tombol hanya bisa dipakai sesuai hak akses user (FR-013); user tak terdaftar men
 
 ---
 
-### FR-002 — Menu
+### FR-002: Menu
 
 Command:
 
@@ -165,20 +165,20 @@ Command:
 
 ```text
 📋 Menu
-/getID   — lihat Telegram ID kamu (publik)
-/start   — selamat datang + menu (publik)
-/menu    — daftar ini (publik)
-/advance — download dengan dialog pilihan (user terdaftar)
-/setUser — kelola user (admin)
-/cancel  — batalkan dialog aktif (user terdaftar)
-/stats   — statistik pemakaian (admin)
+/getID  , lihat Telegram ID kamu (publik)
+/start  , selamat datang + menu (publik)
+/menu   , daftar ini (publik)
+/advance, download dengan dialog pilihan (user terdaftar)
+/setUser, kelola user (admin)
+/cancel , batalkan dialog aktif (user terdaftar)
+/stats  , statistik pemakaian (admin)
 ```
 
 Menggantikan `/help` versi 1.0.
 
 ---
 
-### FR-003 — URL Detection
+### FR-003: URL Detection
 
 Bot harus mendeteksi URL yang dikirim sebagai plain text.
 
@@ -194,7 +194,7 @@ https://www.instagram.com/reel/xxxxx/
 
 ---
 
-### FR-004 — Platform Validation
+### FR-004: Platform Validation
 
 Bot hanya menerima domain:
 
@@ -217,7 +217,7 @@ URL dari domain lain ditolak.
 
 ---
 
-### FR-005 — Download
+### FR-005: Download
 
 Downloader menggunakan yt-dlp.
 
@@ -233,7 +233,7 @@ Pada mode advance, format mengikuti pilihan user di dialog (FR-016/FR-017), buka
 
 ---
 
-### FR-006 — Metadata
+### FR-006: Metadata
 
 Downloader mengambil metadata:
 
@@ -250,7 +250,7 @@ Metadata digunakan untuk caption/logging.
 
 ---
 
-### FR-007 — Telegram Upload
+### FR-007: Telegram Upload
 
 Setelah download selesai, bot mengirim:
 
@@ -264,7 +264,7 @@ beserta video. Output audio memakai caption `🎵 {title}` (FR-018).
 
 ---
 
-### FR-008 — Temporary Files
+### FR-008: Temporary Files
 
 Semua file download disimpan pada:
 
@@ -280,7 +280,7 @@ file harus dihapus
 
 ---
 
-### FR-009 — Error Handling
+### FR-009: Error Handling
 
 Bot harus menangani:
 
@@ -303,7 +303,7 @@ User mendapatkan pesan yang mudah dipahami.
 
 ---
 
-### FR-010 — Concurrent Download
+### FR-010: Concurrent Download
 
 MVP membatasi jumlah download aktif agar VPS tidak kehabisan RAM/CPU.
 
@@ -315,7 +315,7 @@ MAX_CONCURRENT_DOWNLOADS=2
 
 ---
 
-### FR-011 — User Rate Limit
+### FR-011: User Rate Limit
 
 MVP menggunakan rate limit sederhana.
 
@@ -327,7 +327,7 @@ Default:
 
 ---
 
-### FR-012 — /getID (baru, v2.0)
+### FR-012: /getID (baru, v2.0)
 
 Command:
 
@@ -335,7 +335,7 @@ Command:
 /getID
 ```
 
-Perintah **publik** — siapa pun yang bisa mengakses bot boleh memakai ini.
+Perintah **publik**, siapa pun yang bisa mengakses bot boleh memakai ini.
 
 Bot merespons dengan Telegram user ID numerik pengirim:
 
@@ -349,7 +349,7 @@ ID ini dipakai untuk pendaftaran whitelist oleh admin (FR-014). Bot tidak pernah
 
 ---
 
-### FR-013 — Bot Mode & Access Whitelist (baru, v2.0)
+### FR-013: Bot Mode & Access Whitelist (baru, v2.0)
 
 Mode bot diatur lewat `.env`, var `BOT_MODE`:
 
@@ -361,7 +361,7 @@ private            → download & konfigurasi khusus user ID terdaftar
 
 Perubahan `BOT_MODE` diterapkan saat restart bot.
 
-**Public mode** — tanpa gate:
+**Public mode**, tanpa gate:
 
 * siapa pun boleh mengirim URL (default & advance), memakai dialog kualitas;
 * `/setUser` tidak aktif; bila dipanggil bot membalas:
@@ -372,7 +372,7 @@ Bot berjalan dalam public mode (BOT_MODE=public).
 Ubah BOT_MODE=private di .env bila ingin mengunci akses.
 ```
 
-**Private mode** — yang di-gate whitelist:
+**Private mode**, yang di-gate whitelist:
 
 ```text
 kiriman URL (mode default maupun advance)
@@ -399,7 +399,7 @@ tidak ada   → akses ditolak
 
 Daftar efektif = union(`OWNER_USER_ID`, `AUTHORIZED_USER_IDS`, isi `USERS_FILE`).
 
-Bila `BOT_MODE=private` dan daftar efektif kosong (OWNER tidak diset, tidak ada seed), bot **fail-closed** — semua permintaan download ditolak dengan pesan:
+Bila `BOT_MODE=private` dan daftar efektif kosong (OWNER tidak diset, tidak ada seed), bot **fail-closed**, semua permintaan download ditolak dengan pesan:
 
 ```text
 🔒 Bot dikunci (private mode).
@@ -417,9 +417,9 @@ Perbandingan memakai `int` (Telegram user ID), bukan username.
 
 ---
 
-### FR-014 — /setUser (baru, v2.0)
+### FR-014: /setUser (baru, v2.0)
 
-Command khusus **admin** — **hanya aktif pada private mode** (`BOT_MODE=private`):
+Command khusus **admin**, **hanya aktif pada private mode** (`BOT_MODE=private`):
 
 ```text
 /setUser add <telegram_id>
@@ -456,13 +456,13 @@ Admin: /setUser list
 
 Bot:
 👥 Terdaftar:
-987654321 — terdaftar
-123456789 — admin
+987654321, terdaftar
+123456789, admin
 ```
 
 ---
 
-### FR-015 — Advance Mode (baru, v2.0)
+### FR-015: Advance Mode (baru, v2.0)
 
 Command (user terdaftar):
 
@@ -475,12 +475,12 @@ Mengaktifkan **mode advance** untuk chat tersebut (state in-memory per chat). Se
 Ketentuan:
 
 - Mode berlaku sampai pemrosesan selesai, `/advance` kedua (toggle off), `/cancel`, atau sesi kedaluwarsa (FR-019).
-- Setelah satu pemrosesan selesai, mode kembali non-default (matikan sendiri; user bisa kirim link lagi untuk mode default — konsisten aturan alur #1).
+- Setelah satu pemrosesan selesai, mode kembali non-default (matikan sendiri; user bisa kirim link lagi untuk mode default, konsisten aturan alur #1).
 - `/advance` dari user tidak terdaftar → ditolak (FR-013).
 
 ---
 
-### FR-016 — Dialog 1: Tipe Hasil (baru, v2.0)
+### FR-016: Dialog 1: Tipe Hasil (baru, v2.0)
 
 Setelah link valid diterima dalam mode advance, bot menampilkan inline keyboard:
 
@@ -495,9 +495,9 @@ Mau diambil yang mana?
 
 ---
 
-### FR-017 — Dialog 2: Kualitas (baru, v2.0)
+### FR-017: Dialog 2: Kualitas (baru, v2.0)
 
-**Cabang Video** — inline keyboard:
+**Cabang Video**, inline keyboard:
 
 ```text
 [ Best ] [ 1080p ] [ 720p ] [ 480p ] [ 360p ]
@@ -515,7 +515,7 @@ Best  → bestvideo+bestaudio/best          (identik mode default)
 
 Bila kualitas terpilih tidak tersedia di sumber, bot memakai kualitas **tertinggi yang <= pilihan** dan memberitahu di caption (mis. `(720p→480p)`).
 
-**Cabang Audio** — inline keyboard:
+**Cabang Audio**, inline keyboard:
 
 ```text
 [ 320 kbps ] [ 192 kbps ] [ 128 kbps ]
@@ -527,13 +527,13 @@ Setelah pilihan diterima → status `⏳ Sedang memproses...` (FR-003/Performanc
 
 ---
 
-### FR-018 — Audio-Only Download (baru, v2.0)
+### FR-018: Audio-Only Download (baru, v2.0)
 
 Hasil audio-only adalah file `.mp3` (FFmpeg extraction), dikirim via `send_audio` dengan caption `🎵 {title}`, fallback `send_document` mengikuti aturan `MAX_FILE_SIZE_MB` (FR-007). Cleanup mengikuti FR-008.
 
 ---
 
-### FR-019 — Dialog Session Lifecycle (baru, v2.0)
+### FR-019: Dialog Session Lifecycle (baru, v2.0)
 
 - State dialog per chat: `(chat_id → {url, step, tipe, kualitas})`, in-memory.
 - TTL dialog **120 detik**; kedaluwarsa → pesan:
@@ -547,7 +547,7 @@ Hasil audio-only adalah file `.mp3` (FFmpeg extraction), dikirim via `send_audio
 
 ---
 
-### FR-020 — Dukungan TikTok (baru, v2.0)
+### FR-020: Dukungan TikTok (baru, v2.0)
 
 URL TikTok diproses melalui jalur yang sama (validasi FR-004, download FR-005/FR-017, upload FR-007, cleanup FR-008), dengan ketentuan:
 
@@ -558,7 +558,7 @@ URL TikTok diproses melalui jalur yang sama (validasi FR-004, download FR-005/FR
 
 ---
 
-### FR-021 — User Counter & Notifikasi Admin Realtime (baru, v2.2)
+### FR-021: User Counter & Notifikasi Admin Realtime (baru, v2.2)
 
 Bot mencatat setiap Telegram user ID yang pernah mengakses bot (sumber:
 `update.effective_user.id`) ke himpunan user unik yang persisten.
@@ -598,9 +598,9 @@ Ketentuan:
   atau kelambatan API Telegram tidak menunda balasan `/start` (NFR Performance
   < 2 detik tetap terpenuhi).
 - Kegagalan kirim (admin memblokir bot, `RetryAfter`, jaringan) di-log WARNING
-  — tidak boleh meng-crash-kan bot (NFR Reliability). Counter TETAP bertambah
+ , tidak boleh meng-crash-kan bot (NFR Reliability). Counter TETAP bertambah
   meski notifikasi gagal dikirim.
-- `/stats` (hanya admin — `OWNER_USER_ID`/role admin; di public mode tetap
+- `/stats` (hanya admin, `OWNER_USER_ID`/role admin; di public mode tetap
   dibatasi ke admin): tampilkan total user unik, total permintaan diproses,
   total ditolak (rate limit / akses / antrean penuh), dan kedalaman antrean
   saat ini (`queue.qsize()`).
@@ -610,12 +610,12 @@ Ketentuan:
 
 ---
 
-### FR-022 — Antrean Terbatas & Admission Control (baru, v2.2)
+### FR-022: Antrean Terbatas & Admission Control (baru, v2.2)
 
 Tujuan: bot tidak kehabisan RAM saat dihujani request (anti-OOM).
 
 Model lama membuat satu task background per request yang lolos rate limiter
-dan membatasinya hanya dengan `asyncio.Semaphore` — saat diserbu, backlog task
+dan membatasinya hanya dengan `asyncio.Semaphore`, saat diserbu, backlog task
 tumbuh tanpa batas, ack membanjiri API Telegram, dan pekerjaan basi menumpuk.
 
 Model baru:
@@ -647,7 +647,7 @@ Model baru:
   yang diterima = reset saat restart, tidak dibagi antar replika.
 - Satu job = satu slot utuh (download → upload → cleanup) sebagaimana WP-11;
   worker mengambil FIFO.
-- Shutdown: worker dihentikan rapi, task aktif dibatalkan — tanpa task yatim.
+- Shutdown: worker dihentikan rapi, task aktif dibatalkan, tanpa task yatim.
 - Rate limiter per-user (FR-011) tetap lapis PERTAMA (sebelum antrean);
   antrean = kontrol beban global lapis kedua.
 
@@ -719,8 +719,8 @@ RATE_LIMIT_SECONDS=10
 LOG_LEVEL=INFO
 
 # Bot access mode (FR-013):
-#   public  — semua user boleh download; whitelist tidak aktif
-#   private — hanya user ID terdaftar (OWNER_USER_ID + AUTHORIZED_USER_IDS) yang bisa download
+#   public : semua user boleh download; whitelist tidak aktif
+#   private: hanya user ID terdaftar (OWNER_USER_ID + AUTHORIZED_USER_IDS) yang bisa download
 BOT_MODE=public
 
 # Private-mode seeds (hanya dipakai saat BOT_MODE=private):

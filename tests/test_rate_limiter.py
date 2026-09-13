@@ -1,6 +1,6 @@
 """Tests rate limiter per-user (T-054, WP-05, FR-011).
 
-Mock clock lewat patch atribut instance `rl.time_source = lambda: t` —
+Mock clock lewat patch atribut instance `rl.time_source = lambda: t`
 `freezegun` DILARANG (tidak ada di requirements; WP dilarang menambah deps).
 """
 
@@ -36,7 +36,7 @@ async def test_second_request_over_interval_passes(rl: UserRateLimiter) -> None:
     t = 0.0
     rl.time_source = lambda: t
     await rl.acquire(1)
-    t = 15.0  # > 10s — harus lolos
+    t = 15.0  # > 10s, harus lolos
     await rl.acquire(1)
     assert rl.last_map[1] == 15.0
 
@@ -51,7 +51,7 @@ async def test_concurrent_different_chat_ids_do_not_block(rl: UserRateLimiter) -
 
 
 async def test_concurrent_same_chat_id_second_denied(rl: UserRateLimiter) -> None:
-    """Race guard: dua acquire() paralel chat sama — tepat satu lolos (lock per-user)."""
+    """Race guard: dua acquire() paralel chat sama, tepat satu lolos (lock per-user)."""
     rl.time_source = lambda: 0.0
     results = await asyncio.gather(rl.acquire(1), rl.acquire(1), return_exceptions=True)
     ok = [r for r in results if r is None]

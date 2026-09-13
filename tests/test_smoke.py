@@ -1,7 +1,7 @@
 """WP-12 smoke test (T-124, T-125).
 
 T-124: `DOWNLOAD_DIR` dari env dihormati; default `downloads` (FR-008).
-T-125: modul inti bisa di-import tanpa efek samping jaringan — jalur yang sama
+T-125: modul inti bisa di-import tanpa efek samping jaringan, jalur yang sama
 ditempuh `python -m app.main` (AGENTS.md §4.6: tidak ada test menyentuh
 Instagram/Facebook/Telegram nyata).
 
@@ -27,7 +27,7 @@ DUMMY = SecretStr("dum-token")
 
 
 def test_download_dir_env_var_is_honoured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """FR-008 (SC: env): `DOWNLOAD_DIR=...` dari env dipakai apa adanya — tmp_path, bukan repo."""
+    """FR-008 (SC: env): `DOWNLOAD_DIR=...` dari env dipakai apa adanya, tmp_path, bukan repo."""
     custom = str(tmp_path / "my_dl")
     monkeypatch.setenv("DOWNLOAD_DIR", custom)
     settings = Settings(telegram_bot_token=DUMMY)

@@ -1,4 +1,4 @@
-"""WP-13 — Docker image contract tests (T-131..T-136).
+"""WP-13, Docker image contract tests (T-131..T-136).
 
 Bukti terotomasi untuk Dockerfile: base `python:3.12-slim`, ffmpeg via apt (bukan pip),
 urutan layer cache, non-root `USER appuser` + `DOWNLOAD_DIR`, `CMD` exec form,
@@ -9,7 +9,7 @@ Prasyarat: daemon Docker + image sudah di-build (`docker build -t reelsdownloade
 Tanpa keduanya test di-SKIP (bukan gagal): AGENTS §4.6 melarang test yang butuh layanan
 eksternal untuk bisa lulus, jadi gerbang mutu §6 tetap hijau di mesin tanpa Docker.
 
-Token: hanya string dummy pendek `***` — BUKAN format token nyata
+Token: hanya string dummy pendek `***`, BUKAN format token nyata
 `\\d+:[A-Za-z0-9_-]{35}` (AGENTS §5a). Tidak ada kredensial asli di file ini.
 """
 

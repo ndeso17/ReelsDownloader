@@ -21,7 +21,7 @@ Stack: Python 3.11+ (dev/image: 3.12), `python-telegram-bot` 22.8,
 | FR-005 | yt-dlp via Python API, format `bestvideo+bestaudio/best`, merge output `mp4`, `noplaylist`, timeout socket/http 30 dtk, hard-cap job 60 dtk |
 | FR-006 | Metadata dibaca: `title`, `duration`, `uploader`, `webpage_url`, `ext`, `filesize` |
 | FR-007 | Caption `🎬 {title}` baris kosong `Source: Instagram`/`Source: Facebook`. Kirim via `send_video`; bila ukuran > `MAX_FILE_SIZE_MB` → fallback `send_document` |
-| FR-008 | `downloads/` dibersihkan di blok `finally` — sukses maupun gagal |
+| FR-008 | `downloads/` dibersihkan di blok `finally` - sukses maupun gagal |
 | FR-009 | 9 kondisi error dipetakan ke pesan ramah (lihat Troubleshooting); traceback lengkap hanya ke log |
 | FR-010 | Maks `MAX_CONCURRENT_DOWNLOADS` job (download+upload+cleanup) serentak; sisanya mengantri |
 | FR-011 | Per chat: request kedua dalam `RATE_LIMIT_SECONDS` ditolak dengan `Terlalu sering; coba lagi dalam N.N detik` |
@@ -31,13 +31,13 @@ response awal tetap cepat (< 2 dtk, NFR Performance) walau semua slot busy.
 
 ## Environment variables
 
-Persis 6 var PRD §5 — tidak ada var lain yang dibaca (`extra="forbid"`).
+Persis 6 var PRD §5, tidak ada var lain yang dibaca (`extra="forbid"`).
 Nilai di luar rentang sah → `ValidationError` saat boot.
 
 | Variabel | Default | Arti | Batas valid |
 |---|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | *(wajib)* | Token bot dari @BotFather. Disimpan sebagai `SecretStr`, tidak pernah tercetak di log/dump | — |
-| `DOWNLOAD_DIR` | `downloads` | Direktori file sementara + volume download | — |
+| `TELEGRAM_BOT_TOKEN` | *(wajib)* | Token bot dari @BotFather. Disimpan sebagai `SecretStr`, tidak pernah tercetak di log/dump | - |
+| `DOWNLOAD_DIR` | `downloads` | Direktori file sementara + volume download | - |
 | `MAX_CONCURRENT_DOWNLOADS` | `2` | Jumlah unduhan aktif serentak (`asyncio.Semaphore`) | `>= 1` |
 | `MAX_FILE_SIZE_MB` | `50` | Batas ukuran file; dicek sebelum download (metadata) dan saat upload (fallback document) | `>= 1` |
 | `RATE_LIMIT_SECONDS` | `10` | Jeda minimum antar request per chat | `>= 0` |
@@ -63,7 +63,7 @@ Jangan pernah menaruh token asli di file yang bisa di-diff: `.env` sudah ada di
 python -m app.main
 ```
 
-Bot polling (`getUpdates`) — tidak butuh webhook/domain. Log INFO `application
+Bot polling (`getUpdates`), tidak butuh webhook/domain. Log INFO `application
 built` lalu `polling started` menandakan boot sukses. Token salah →
 `telegram.error.InvalidToken` dan proses exit (rc=1).
 
@@ -76,7 +76,7 @@ Build image (basis `python:3.12-slim` + `ffmpeg` + `procps`, user non-root
 docker build -t reelsdownloader .
 ```
 
-Jalankan — 5 var dari `--env-file`, `DOWNLOAD_DIR` sudah di-set di image ke
+Jalankan, 5 var dari `--env-file`, `DOWNLOAD_DIR` sudah di-set di image ke
 `/app/downloads` dan di-mount sebagai volume:
 
 ```bash
@@ -102,14 +102,14 @@ Catatan operasional:
   `Semaphore` dan rate limiter in-memory valid. Menjalankan banyak replika
   berarti tiap replika punya limit sendiri.
 - `.dockerignore` mengecualikan `tests/`, `docs/`, `.env`, `.venv`, `AGENTS.md`
-  dari build context — token tidak pernah masuk image.
+  dari build context, token tidak pernah masuk image.
 - Cek health: `docker inspect --format '{{json .State.Health}}' <container>`.
 - Log: `docker logs -f <container>`. Hentikan: `docker stop <container>`
   (SIGTERM, tanpa core file).
 
 ## Deploy 24/7 di VPS
 
-Docker (rekomendasi — sudah termasuk FFmpeg):
+Docker (rekomendasi, sudah termasuk FFmpeg):
 
 ```bash
 git clone git@github.com:ndeso17/ReelsDownloader.git && cd ReelsDownloader
@@ -149,7 +149,7 @@ journalctl -u reelsdownloader -f
 
 `--restart unless-stopped` / `Restart=always` menjaga bot hidup; satu URL gagal
 tidak menghentikan proses (exception tertangkap per job, NFR Reliability).
-Status 24/7 di VPS nyata masih perlu diverifikasi manusia (PRD §8 butir 9 —
+Status 24/7 di VPS nyata masih perlu diverifikasi manusia (PRD §8 butir 9
 `MANUAL-VERIFY`).
 
 ## Test & lint
@@ -174,11 +174,11 @@ Semua test jalan tanpa akses Instagram/Facebook nyata (yt-dlp dan bot di-mock).
 | Video private | `🔒 Video private/terbatas.` | Akun privat / butuh login / age-restricted. Bot **tidak** mengakali login (PRD §9) |
 | Video tidak ditemukan | `🔍 Video tidak ditemukan.` | Post dihapus / URL salah / extractor tidak mendukung format itu |
 | Download gagal | `⚠️ Gagal mengunduh.` | Jaringan/sumber bermasalah; cek `docker logs` untuk traceback |
-| FFmpeg gagal | `⚠️ Gagal memproses video.` | Mapping tersedia untuk `FFmpegFailedError`. Catatan akurat: jalur yt-dlp saat ini memetakan pesan extractor ke private/tidak ditemukan/gagal-unduh, jadi kegagalan merge paling sering muncul sebagai `⚠️ Gagal mengunduh.` — pastikan `ffmpeg` tersedia di host/image |
+| FFmpeg gagal | `⚠️ Gagal memproses video.` | Mapping tersedia untuk `FFmpegFailedError`. Catatan akurat: jalur yt-dlp saat ini memetakan pesan extractor ke private/tidak ditemukan/gagal-unduh, jadi kegagalan merge paling sering muncul sebagai `⚠️ Gagal mengunduh.` - pastikan `ffmpeg` tersedia di host/image |
 | File terlalu besar | `📏 File terlalu besar.` | Melebihi `MAX_FILE_SIZE_MB` (default 50). Naikkan nilainya bila perlu |
 | Upload Telegram gagal | `⚠️ Gagal mengirim ke Telegram.` | API Telegram menolak (token, jaringan, atau batas ukuran/format Telegram). Detail di log |
 | Timeout | `⏱️ Timeout.` | Job melebihi 60 dtk (`DOWNLOAD_TIMEOUT_SECONDS`) atau socket/http 30 dtk |
-| Rate limit | `Terlalu sering; coba lagi dalam N.N detik` | FR-011 — request kedua dalam jendela `RATE_LIMIT_SECONDS`; pesan dikirim langsung dari handler (`str(exc)`), tanpa emoji |
+| Rate limit | `Terlalu sering; coba lagi dalam N.N detik` | FR-011 - request kedua dalam jendela `RATE_LIMIT_SECONDS`; pesan dikirim langsung dari handler (`str(exc)`), tanpa emoji |
 | Lainnya | `⚠️ Terjadi kesalahan. Coba lagi sebentar lagi.` | Exception tak terklasifikasi; traceback di log |
 
 Masalah umum lain:

@@ -67,7 +67,7 @@ class MockYDL:
 
 @pytest.fixture
 def tmp_downloads(tmp_path: Path) -> str:
-    """Dir sementara untuk outtmpl — path terkendali kode, bukan user."""
+    """Dir sementara untuk outtmpl, path terkendali kode, bukan user."""
     target = tmp_path / "downloads"
     target.mkdir()
     return str(target)

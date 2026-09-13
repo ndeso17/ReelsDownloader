@@ -60,7 +60,7 @@ AGENTS.md
 ## Agent workspace (local only)
 docs/agents/
 
-## WP-02 (T-021) — repo hygiene. APPEND ONLY: baris di atas (`.env*`, `AGENTS.md`,
+## WP-02 (T-021): repo hygiene. APPEND ONLY: baris di atas (`.env*`, `AGENTS.md`,
 ## `docs/agents/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`) tidak diubah.
 downloads/*
 !downloads/.gitkeep

@@ -1,6 +1,6 @@
 """WP-12 gerbang keamanan statis (T-121, T-122, T-123; NFR Security; AGENTS.md §5).
 
-Scan hanya teks sumber via `pathlib` + `re` + `ast` — tanpa subprocess, tanpa
+Scan hanya teks sumber via `pathlib` + `re` + `ast`, tanpa subprocess, tanpa
 network (AGENTS.md §4.6). Pola ditulis agar tidak match pada file test ini
 sendiri: scan bahaya dibatasi ke `app/`, dan regex dibangun dari fragmen.
 
@@ -36,7 +36,7 @@ DANGEROUS_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 ]
 
 #: Jalur request tidak boleh memblokir event loop (T-123, NFR Performance).
-#: Scan TEKS penuh di handlers/ + services/ — docstring pun dilarang menyebut
+#: Scan TEKS penuh di handlers/ + services/: docstring pun dilarang menyebut
 #: modul sinkron ini (AGR: semua I/O = `async def` / `asyncio.to_thread`).
 BLOCKING_IO_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("time.sleep(", re.compile(r"\btime\.sleep\s*\(")),
@@ -56,7 +56,7 @@ def _python_files(base: Path) -> list[Path]:
 
 
 def _non_code_lines(text: str) -> set[int]:
-    """Nomor baris docstring dan komentar — bukan kode yang tereksekusi."""
+    """Nomor baris docstring dan komentar, bukan kode yang tereksekusi."""
     excluded: set[int] = set()
     try:
         tree = ast.parse(text)
@@ -133,7 +133,7 @@ def test_no_real_token_shape_anywhere(dir_name: str) -> None:
 def test_settings_token_is_secretstr_and_never_leaks() -> None:
     """T-122: `Settings.telegram_bot_token` = `SecretStr`.
 
-    `repr`/`model_dump()` tidak membuka nilai. Semua string di bawah dummy —
+    `repr`/`model_dump()` tidak membuka nilai. Semua string di bawah dummy
     bukan kredensial, hanya umpan uji anti-bocor.
     """
     dummy_value = "dum-token-value"  # dipecah: hindari trigger scanner

@@ -48,5 +48,5 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Satu instance Settings per proses (cache) — dipanggil sekali di entrypoint."""
+    """Satu instance Settings per proses (cache), dipanggil sekali di entrypoint."""
     return Settings()

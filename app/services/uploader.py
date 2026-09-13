@@ -3,7 +3,7 @@
 WP-08: kirim video hasil unduhan ke chat pengguna lewat ``bot.send_video``;
 bila ukuran file melebihi ``MAX_FILE_SIZE_MB`` jatuh ke ``bot.send_document``.
 Ukuran diperiksa di sini (metadata ``filesize`` -> fallback stat disk), bukan
-di downloader. ``timeout=30`` (T-082) diteruskan sebagai ``read_timeout`` —
+di downloader. ``timeout=30`` (T-082) diteruskan sebagai ``read_timeout``
 python-telegram-bot 22.8 tidak punya parameter ``timeout`` di
 ``send_video``/``send_document`` (lihat Log WP-08 + FINDINGS). Tidak ada
 network nyata di test: semua bot method di-AsyncMock (AGENTS.md §4.6).
@@ -21,7 +21,7 @@ from app.services.validator import detect_platform
 
 logger = logging.getLogger(__name__)
 
-#: T-082 — timeout API Telegram untuk upload (detik).
+#: T-082: timeout API Telegram untuk upload (detik).
 UPLOAD_TIMEOUT_SECONDS = 30
 
 
@@ -56,7 +56,7 @@ async def send_video(
     """Upload satu video ke Telegram (FR-007) dengan fallback document.
 
     Naik: ``UploadError`` (``TelegramError`` dari API), ``UnsupportedUrlError``
-    (URL tak dikenal — sudah harus lolos validasi WP-03 sebelum sampai sini).
+    (URL tak dikenal, sudah harus lolos validasi WP-03 sebelum sampai sini).
     """
     caption = build_caption(title, url)
     size_bytes = _file_size_bytes(file_path, metadata)

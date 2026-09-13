@@ -1,7 +1,7 @@
 """Test WP-10 (T-102, FR-009): user_message() + integrasi handler T-103/T-104.
 
 Pesan wajib ramah pengguna: tanpa traceback, tanpa isi exception mentah.
-Handler diuji dengan mock update/context/bot (pola WP-06/WP-09) — tanpa
+Handler diuji dengan mock update/context/bot (pola WP-06/WP-09), tanpa
 jaringan nyata (AGENTS.md §4.6).
 """
 
@@ -31,7 +31,7 @@ from app.services.errors import (
 )
 from app.services.validator import UnsupportedUrlError
 
-#: Isi exception mentah yang dipakai pemantik di bawah — tidak boleh bocor.
+#: Isi exception mentah yang dipakai pemantik di bawah: tidak boleh bocor.
 RAW = "Detail mentah: /home/app/secret.mp4 Traceback most recent call last"
 
 MESSAGES = [
@@ -73,7 +73,7 @@ def test_user_message_maps_unknown_exception_to_generic() -> None:
     assert RAW not in msg
 
 
-# ---------------- T-103: jalur _job — pesan user_message sampai ke chat ----------------
+# ---------------- T-103: jalur _job: pesan user_message sampai ke chat ----------------
 
 VALID_URL = "https://www.instagram.com/reel/xxxxx/"
 

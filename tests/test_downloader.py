@@ -1,8 +1,8 @@
-"""Test downloader WP-04 (T-047) — tanpa network (AGENTS.md §4.6).
+"""Test downloader WP-04 (T-047), tanpa network (AGENTS.md §4.6).
 
 Semua akses yt-dlp lewat `MockYDL` dari fixture `mock_ydl` (tests/conftest.py).
 Catatan: pytest me-load `tests/conftest.py` sebagai module top-level `conftest`,
-jadi JANGAN `from tests.conftest import MockYDL` — itu objek kelas berbeda dan
+jadi JANGAN `from tests.conftest import MockYDL`, itu objek kelas berbeda dan
 mutasi padanya tidak terlihat oleh kelas yang dipatch. Selalu pakai kelas yang
 dikembalikan fixture.
 """
@@ -156,7 +156,7 @@ def test_build_ydl_opts_format_and_merge(tmp_downloads: str):
 
 
 def test_build_ydl_opts_outtmpl_code_controlled_no_title(tmp_downloads: str):
-    """outtmpl = join(dir, '%(id).10s.%(ext)s') — TANPA input user, TANPA %(title)s."""
+    """outtmpl = join(dir, '%(id).10s.%(ext)s'), TANPA input user, TANPA %(title)s."""
     opts = build_ydl_opts(tmp_downloads, MAX_50MB)
     assert opts["outtmpl"] == os.path.join(tmp_downloads, "%(id).10s.%(ext)s")
     assert "%(title)" not in opts["outtmpl"]
@@ -177,7 +177,7 @@ def test_build_ydl_opts_max_filesize(tmp_downloads: str):
 
 
 def test_build_ydl_opts_accepted_by_real_youtube_dl(tmp_downloads: str):
-    """T-046: YoutubeDL asli menerima opts & menyimpan param itu — tanpa network."""
+    """T-046: YoutubeDL asli menerima opts & menyimpan param itu, tanpa network."""
     params = yt_dlp.YoutubeDL(build_ydl_opts(tmp_downloads, MAX_50MB)).params
     for key in (
         "format",

@@ -1,4 +1,4 @@
-"""Test uploader WP-08 (T-081..T-086, T-087) — tanpa network."""
+"""Test uploader WP-08 (T-081..T-086, T-087), tanpa network."""
 
 from __future__ import annotations
 

@@ -27,10 +27,10 @@ from app.services.errors import (
 
 logger = logging.getLogger(__name__)
 
-#: FR-006 — persis 6 field yang dibaca handler caption.
+#: FR-006: persis 6 field yang dibaca handler caption.
 METADATA_FIELDS = ("title", "duration", "uploader", "webpage_url", "ext", "filesize")
 
-#: NFR Reliability — hard-cap satu job download (T-046).
+#: NFR Reliability: hard-cap satu job download (T-046).
 DOWNLOAD_TIMEOUT_SECONDS = 60
 
 
@@ -56,7 +56,7 @@ def build_ydl_opts(download_dir: str, max_bytes: int) -> dict:
     opts: dict = {
         "format": "bestvideo+bestaudio/best",
         "merge_output_format": "mp4",
-        # Nama file dihasilkan yt-dlp dari id — bukan input user (AGENTS.md §5).
+        # Nama file dihasilkan yt-dlp dari id: bukan input user (AGENTS.md §5).
         "outtmpl": os.path.join(download_dir, "%(id).10s.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
@@ -94,7 +94,7 @@ def _classify_yt_dlp_error(exc: yt_dlp.utils.YoutubeDLError) -> Exception:
 
 
 def _run_download(url: str, opts: dict) -> DownloadResult:
-    """Bagian blocking (Python API yt-dlp) — hanya dipanggil via asyncio.to_thread."""
+    """Bagian blocking (Python API yt-dlp), hanya dipanggil via asyncio.to_thread."""
     with yt_dlp.YoutubeDL(opts) as ydl:
         # T-044: pre-check ukuran SEBELUM bit apa pun diunduh.
         info = ydl.extract_info(url, download=False)
@@ -132,7 +132,7 @@ async def download(url: str, settings: Settings) -> DownloadResult:
             timeout=DOWNLOAD_TIMEOUT_SECONDS,
         )
     except TimeoutError:
-        # asyncio.TimeoutError adalah alias TimeoutError di 3.12 — jangan diklasifikasi.
+        # asyncio.TimeoutError adalah alias TimeoutError di 3.12: jangan diklasifikasi.
         logger.warning("Download job timeout >%ss: %s", DOWNLOAD_TIMEOUT_SECONDS, url)
         raise
     except yt_dlp.utils.YoutubeDLError as exc:

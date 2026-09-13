@@ -2,7 +2,7 @@
 
 Fungsi di modul ini sinkron dan murni (atau I/O lokal ringan). Pemanggil di jalur
 request handler wajib membungkus ``clean_dir`` dengan ``asyncio.to_thread`` sesuai
-AGENTS.md §4.4 — pola yang sama dengan ``_run_download`` di WP-04.
+AGENTS.md §4.4, pola yang sama dengan ``_run_download`` di WP-04.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def clean_dir(directory: Path) -> None:
 
     Symlink ikut dihapus (ia entri file, bukan direktori). Subdirektori sengaja
     TIDAK dihapus recursively: di luar frasa "semua file" dan di luar scope WP-07
-    (AGENTS.md §3.2 langkah 3 — tanpa fitur tambahan). Alur download hanya
+    (AGENTS.md §3.2 langkah 3, tanpa fitur tambahan). Alur download hanya
     menaruh file di `downloads/`, jadi T-074 dan assert cleanup WP-09
     (`iterdir() == []`) tetap terpenuhi. Direktori yang tidak ada dianggap sudah
     bersih, jadi fungsi ini tidak raise untuk path absen.
@@ -67,7 +67,7 @@ def safe_remove(path: Path) -> None:
 
     ``FileNotFoundError`` dianggap sukses (file sudah hilang = tujuan tercapai),
     sehingga cleanup idempoten: aman dipanggil dua kali atau untuk path yang
-    sudah dihapus proses lain. ``OSError`` lain (mis. permission) tetap naik —
+    sudah dihapus proses lain. ``OSError`` lain (mis. permission) tetap naik
     kegagalan nyata tidak boleh disembunyikan.
     """
     try:
@@ -90,7 +90,7 @@ def ensure_clean_dir(directory: Path, max_age_seconds: float = 86400) -> None:
             try:
                 age = now - child.stat().st_mtime
             except FileNotFoundError:
-                # Race: file hilang antara iterdir() dan stat() — sudah bersih.
+                # Race: file hilang antara iterdir() dan stat(): sudah bersih.
                 continue
             if age > max_age_seconds:
                 safe_remove(child)
