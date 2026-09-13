@@ -13,3 +13,9 @@ AGENTS.md
 docs/agents/
 tests/
 scripts/
+
+# WP-15 (T-157): state runtime user/statistik (APPEND ONLY)
+users.json
+users.json.tmp
+stats.json
+stats.json.tmp

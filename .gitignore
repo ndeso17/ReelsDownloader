@@ -80,3 +80,9 @@ htmlcov/
 *.sublime-project
 *.sublime-workspace
 .history/
+
+## WP-15 (T-157): state runtime user/statistik (APPEND ONLY, pola WP-02 dijaga)
+users.json
+users.json.tmp
+stats.json
+stats.json.tmp

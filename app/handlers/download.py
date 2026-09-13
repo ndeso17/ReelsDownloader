@@ -9,6 +9,7 @@ from pathlib import Path
 from telegram.ext import ContextTypes
 
 from app.services import downloader as downloader_service
+from app.services.access import MSG_ACCESS_DENIED, can_download
 from app.services.errors import RateLimitedError, UploadError, user_message
 from app.services.uploader import send_video
 from app.services.validator import UnsupportedUrlError, extract_url, validate_url
@@ -66,6 +67,18 @@ async def _upload_after_download(
 
 
 async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
+    # T-155 (FR-013, FR-015): gerbang akses di PALING ATAS, SEBELUM `extract_url`
+    # dan sebelum rate limiter. `can_download` selalu True saat public (default
+    # `bot_mode`), dan bot_data tanpa kunci `users` tetap jalan (default `{}`),
+    # jadi 206 test lama tidak diutak-atik. Tidak ada perubahan lain di fungsi
+    # ini: jalur `create_task` di bawah tetap milik WP-06..WP-10 (antrean = WP-17).
+    bot_data = context.bot_data
+    settings = bot_data["settings"]
+    user_id = update.effective_user.id if update.effective_user else None
+    if not can_download(user_id, settings, bot_data.get("users", {})):
+        await update.effective_message.reply_text(MSG_ACCESS_DENIED)
+        return
+
     if not update.message or not update.message.text:
         return
 
@@ -80,7 +93,6 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(str(exc))
         return
 
-    bot_data = context.bot_data
     rate_limiter = bot_data["rate_limiter"]
     chat_id = update.effective_chat.id
 
@@ -92,7 +104,6 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("⏳ Sedang memproses...")
 
-    settings = bot_data["settings"]
     # T-111/T-112 (FR-010): semaphore dibangun saat startup di `app/main.py` dan
     # dipakai ulang oleh semua job. `.get()` + fallback hanya untuk jalur pemanggilan
     # langsung (test unit WP-06/WP-08/WP-09/WP-10 membuat `bot_data` manual tanpa
