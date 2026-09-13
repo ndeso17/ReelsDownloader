@@ -5,12 +5,20 @@ hanya aktif di private mode. Guard `/setUser` berurutan dan TIDAK bisa dilewati:
 tanpa guard, `/setUser` = penulisan daftar whitelist oleh siapa pun.
 
 Semua mutasi file lewat `asyncio.to_thread` (AGENTS.md §4.4: I/O blocking).
+
+Serialisasi transaksi (REWORK-R3): `asyncio.to_thread` hanya memindahkan I/O ke thread
+pool, ia TIDAK mengantrikan dua panggilan handler. Karena itu baca-daftar -> ubah ->
+tulis -> tulis-balik ke `bot_data["users"]` dibungkus satu `asyncio.Lock`:
+`bot_data["access_lock"]` bila tersedia (dibuat `app/main.py`), selain itu kunci per
+jalur berkas dari `write_lock_for`. Tanpa kunci itu, dua `/setUser` serentak saling
+menimpa hasil JSON (lost update; probe race QC lama: 2/12 BAD).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from telegram.ext import ContextTypes
 
@@ -31,7 +39,32 @@ from app.services.access import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["get_id", "menu", "set_user"]
+__all__ = ["get_id", "menu", "set_user", "write_lock_for"]
+
+#: Kunci cadangan per jalur berkas whitelist, dipakai bila `bot_data` tidak menyediakan
+#: `access_lock` (mis. test yang membangun `context` manual). `dict.setdefault` atomik
+#: di CPython dan seluruh akses terjadi di satu event loop, jadi tidak perlu mutex.
+_WRITE_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def write_lock_for(users_file: str | os.PathLike[str]) -> asyncio.Lock:
+    """Kembalikan (atau buat) `asyncio.Lock` untuk satu jalur berkas whitelist.
+
+    Per path, bukan global: dua berkas berbeda tidak boleh saling menahan.
+    """
+    key = os.fspath(users_file)
+    lock = _WRITE_LOCKS.get(key)
+    if lock is None:
+        lock = _WRITE_LOCKS.setdefault(key, asyncio.Lock())
+    return lock
+
+
+def _access_lock(context, users_file: str | os.PathLike[str]) -> asyncio.Lock:
+    """Kunci transaksi untuk satu tulis whitelist: `access_lock` bot, else kunci per path."""
+    lock = context.bot_data.get("access_lock")
+    if isinstance(lock, asyncio.Lock):
+        return lock
+    return write_lock_for(users_file)
 
 
 def _user_id_of(update):
@@ -53,6 +86,16 @@ async def menu(update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(text)
 
 
+def _label_of(update, user_id: int) -> str:
+    """Label tampilan user: `first_name (@username)` bila pengirim mendaftarkan dirinya."""
+    user = getattr(update, "effective_user", None)
+    if user is None or getattr(user, "id", None) != user_id:
+        return ""
+    first = getattr(user, "first_name", None) or ""
+    username = getattr(user, "username", None)
+    return f"{first} (@{username})" if username else first
+
+
 async def set_user(update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """FR-014: `/setUser add|remove|list <id>`; admin-only, hanya private mode."""
     settings = context.bot_data["settings"]
@@ -70,64 +113,57 @@ async def set_user(update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text(MSG_ACCESS_DENIED)
         return
 
-    args = list(getattr(context, "args", None) or [])
-    action = args[0].lower() if args else ""
+    parts = context.args or []
+    command = parts[0].lower() if parts else ""
 
-    if action == "list":
-        await update.effective_message.reply_text(_render_list(users))
+    # (3) list: murni baca, tidak menyentuh disk -> tanpa kunci transaksi.
+    if command == "list":
+        lines = [MSG_SETUSER_LIST_HEADER.format(total=user_store.count(users))]
+        if not users:
+            lines.append(MSG_SETUSER_LIST_EMPTY.format(total=0))
+        for user_id in sorted(users):
+            lines.append(f"- {user_id}: {users[user_id]}")
+        await update.effective_message.reply_text("\n".join(lines))
         return
 
-    if action not in ("add", "remove") or len(args) < 2:
-        await update.effective_message.reply_text(MSG_SETUSER_USAGE)
-        return
-
-    # (3) Argumen tanpa ID numerik -> teks penggunaan, tanpa mutasi.
+    # (4) add/remove: argumen target harus ID numerik sebelum ada mutasi.
     try:
-        target_id = int(str(args[1]).strip())
-    except (TypeError, ValueError):
+        target_id = int(parts[1])
+    except (IndexError, ValueError):
         await update.effective_message.reply_text(MSG_SETUSER_USAGE)
         return
 
-    if action == "add":
-        users = user_store.add_user(users, target_id, _label_of(update, target_id))
-        context.bot_data["users"] = users
-        await _persist(settings, users)
-        await update.effective_message.reply_text(MSG_SETUSER_ADDED.format(user_id=target_id))
-        return
-
-    # (4) remove: owner tidak bisa dihapus dari daftar efektif.
-    if target_id == getattr(settings, "owner_user_id", None):
+    # (5) Mutasi owner terlarang: ditolak sebelum ada perubahan state.
+    if command == "remove" and is_owner(target_id, settings):
         await update.effective_message.reply_text(MSG_SETUSER_NEED_PRIVATE_OWNER)
         return
 
-    users = user_store.remove_user(users, target_id)
-    context.bot_data["users"] = users
-    await _persist(settings, users)
-    await update.effective_message.reply_text(MSG_SETUSER_REMOVED.format(user_id=target_id))
+    if command not in ("add", "remove"):
+        await update.effective_message.reply_text(MSG_SETUSER_USAGE)
+        return
 
+    # (6) Transaksi read-modify-write terserialisasi per berkas (REWORK-R3). Snapshot
+    # dibaca ULANG di dalam kunci: snapshot saat handler masuk bisa sudah basi bila
+    # transaksi lain selesai lebih dulu, dan menulis snapshot basi = lost update.
+    users_file = getattr(settings, "users_file", None) or "users.json"
+    async with _access_lock(context, users_file):
+        logger.info("setUser %s target=%s by=%s", command, target_id, actor_id)
+        current: dict[int, str] = context.bot_data.get("users", {})
+        if command == "add":
+            updated = user_store.add_user(current, target_id, _label_of(update, target_id))
+        else:
+            updated = user_store.remove_user(current, target_id)
+        saved = await asyncio.to_thread(user_store.save_users, users_file, updated)
+        context.bot_data["users"] = updated
+        reply = (
+            MSG_SETUSER_ADDED.format(user_id=target_id)
+            if command == "add"
+            else MSG_SETUSER_REMOVED.format(user_id=target_id)
+        )
 
-def _label_of(update, target_id: int) -> str:
-    """Label tampilan: `"first_name (@username)"` bila target = pengirim, else kosong."""
-    actor = getattr(update, "effective_user", None)
-    if actor is None or getattr(actor, "id", None) != target_id:
-        return ""
-    first_name = getattr(actor, "first_name", "") or ""
-    username = getattr(actor, "username", None)
-    if username:
-        return f"{first_name} (@{username})".strip()
-    return str(first_name)
+    # (7) Persist gagal: beri tahu; in-memory tetap (bot tidak boleh mati karena disk).
+    if not saved:
+        logger.error("gagal persist whitelist ke %s", users_file)
+        reply += "\nGagal menyimpan ke berkas; perubahan hilang saat bot restart."
 
-
-def _render_list(users: dict[int, str]) -> str:
-    if not users:
-        return MSG_SETUSER_LIST_EMPTY.format(total=0)
-    lines = [MSG_SETUSER_LIST_HEADER.format(total=user_store.count(users))]
-    for user_id in sorted(users):
-        label = users[user_id]
-        lines.append(f"- {user_id}" + (f" , {label}" if label else ""))
-    return "\n".join(lines)
-
-
-async def _persist(settings, users: dict[int, str]) -> bool:
-    """Simpan atomik di thread terpisah; gagal -> log saja (handler tetap menjawab)."""
-    return await asyncio.to_thread(user_store.save_users, settings.users_file, users)
+    await update.effective_message.reply_text(reply)

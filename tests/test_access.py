@@ -7,7 +7,11 @@ di file ini string dummy pendek (AGENTS.md §5a).
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
+import stat
+import threading
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,6 +19,7 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 from app.config import Settings
+from app.handlers import account as account_mod
 from app.handlers import download as download_mod
 from app.handlers.account import get_id, menu, set_user
 from app.handlers.download import download_handler
@@ -295,7 +300,15 @@ def test_user_store_roundtrip_corrupt_and_atomic(tmp_path):
     with patch("app.services.user_store.os.replace") as fake_replace:
         assert user_store.save_users(path, users) is True
     fake_replace.assert_called_once()
-    assert fake_replace.call_args.args[0] == str(path) + ".tmp"
+    src, dst = fake_replace.call_args.args
+    assert dst == str(path)  # tujuan rename = path final
+    assert src != str(path)  # tmp BUKAN path final (tulis tidak langsung)
+    assert os.path.dirname(os.path.abspath(src)) == str(tmp_path)  # tmp serumah
+    # REWORK-R3: tmp unik per penulisan, bukan nama tetap `<path>.tmp` yang identik
+    # untuk semua penulis (nama tetap itulah yang bikin dua tulis interleave).
+    assert src != str(path) + ".tmp"
+    assert os.path.basename(src).startswith(os.path.basename(path) + ".")
+    assert src.endswith(".tmp")
     # save gagal (OSError) -> False, tidak raise
     with patch("app.services.user_store.open", side_effect=OSError("read-only")):
         assert user_store.save_users(tmp_path / "other.json", users) is False
@@ -306,6 +319,258 @@ def test_user_store_roundtrip_corrupt_and_atomic(tmp_path):
         9876543210123: "ID besar",
     }
     assert user_store.remove_user({7: "x"}, 7) == {}
+
+
+# ---------------- REWORK-R1..R3: mode 0600, fsync, tmp unik, serialisasi ----------------
+
+
+def test_save_users_mode_is_0600(tmp_path):
+    """REWORK-R1: berkas final 0600 (bukan 0664 warisan umask), termasuk saat sudah ada."""
+    path = tmp_path / "users.json"
+    path.write_text("{}", encoding="utf-8")
+    os.chmod(path, 0o644)  # pra-ada dengan mode longgar -> save harus menormalkan
+
+    assert user_store.save_users(path, {42: "Budi"}) is True
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+    # Penulisan kedua (replace menimpa) tetap 0600, bukan mode tmp lain.
+    assert user_store.save_users(path, {42: "Budi", 43: "Ani"}) is True
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+def test_save_users_fsyncs_file_before_replace(tmp_path):
+    """REWORK-R2: flush + `os.fsync(fd)` SEBELUM `os.replace` (yang dikunci = urutan)."""
+    path = tmp_path / "users.json"
+    order: list[str] = []
+
+    real_fsync = os.fsync
+    real_replace = os.replace
+
+    def spy_fsync(fd):
+        order.append("fsync")
+        return real_fsync(fd)
+
+    def spy_replace(src, dst):
+        order.append("replace")
+        return real_replace(src, dst)
+
+    with (
+        patch("app.services.user_store.os.fsync", side_effect=spy_fsync),
+        patch("app.services.user_store.os.replace", side_effect=spy_replace),
+    ):
+        assert user_store.save_users(path, {7: "x"}) is True
+
+    assert order.count("fsync") >= 1  # berkas (dan idealnya direktori) di-fsync
+    assert order.index("fsync") < order.index("replace")  # fsync sebelum rename
+    assert user_store.load_users(path) == {7: "x"}
+
+
+def test_save_users_fsyncs_parent_dir_after_replace(tmp_path):
+    """REWORK-R2: `fsync` direktori parent dipanggil setelah rename (durability entri)."""
+    path = tmp_path / "users.json"
+    order: list[str] = []
+
+    real_fsync = os.fsync
+    real_replace = os.replace
+
+    def spy_fsync(fd):
+        try:
+            is_dir = stat.S_ISDIR(os.fstat(fd).st_mode)
+        except OSError:
+            is_dir = False
+        order.append("fsync_dir" if is_dir else "fsync_file")
+        return real_fsync(fd)
+
+    def spy_replace(src, dst):
+        order.append("replace")
+        return real_replace(src, dst)
+
+    with (
+        patch("app.services.user_store.os.fsync", side_effect=spy_fsync),
+        patch("app.services.user_store.os.replace", side_effect=spy_replace),
+    ):
+        assert user_store.save_users(path, {7: "x"}) is True
+
+    assert "fsync_file" in order
+    assert "fsync_dir" in order
+    assert order.index("fsync_file") < order.index("replace")
+    assert order.index("replace") < order.index("fsync_dir")
+
+
+def test_save_users_dir_fsync_failure_does_not_break_save(tmp_path):
+    """REWORK-R2: platform yang menolak fsync direktori tidak boleh menggagalkan save."""
+    path = tmp_path / "users.json"
+    real_fsync = os.fsync  # capture SEBELUM patch (patch menyentuh os module yang sama)
+
+    def fake_fsync(fd):
+        try:
+            is_dir = stat.S_ISDIR(os.fstat(fd).st_mode)
+        except OSError:
+            is_dir = False
+        if is_dir:
+            raise OSError("EINVAL: dir fsync ditolak")
+        return real_fsync(fd)
+
+    with patch("app.services.user_store.os.fsync", side_effect=fake_fsync):
+        assert user_store.save_users(path, {5: "y"}) is True
+    assert user_store.load_users(path) == {5: "y"}
+
+
+def test_save_users_concurrent_same_path_tmp_never_collides(tmp_path):
+    """REWORK-R3 (unit): dua save serentak dari dua thread, dua-duanya sukses, tmp unik."""
+    path = tmp_path / "users.json"
+    tmp_sources: list[str] = []
+    lock = threading.Lock()
+    real_replace = os.replace
+
+    def spy_replace(src, dst):
+        with lock:
+            tmp_sources.append(str(src))
+        return real_replace(src, dst)
+
+    results: list[bool] = []
+
+    def worker(i: int) -> None:
+        results.append(user_store.save_users(path, {i: f"user{i}"}))
+
+    with patch("app.services.user_store.os.replace", side_effect=spy_replace):
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert results == [True] * 8
+    assert len(tmp_sources) == 8
+    assert len(set(tmp_sources)) == 8  # tidak ada tmp path yang dipakai dua kali
+    assert user_store.load_users(path)  # JSON final valid (tidak korup)
+    assert not list(tmp_path.glob("*.tmp"))  # tidak ada tmp yatim
+
+
+def _read_json_file(path: str) -> dict:
+    """Baca + parse JSON di fungsi sync (hindari blocking call di body async)."""
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _unlink_if_exists(path: str) -> None:
+    """Hapus berkas bila ada (sync helper, sama alasannya dengan `_read_json_file`)."""
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
+def _leftover_tmp(dir_path: str) -> list:
+    """Daftar sisa berkas `.tmp` di direktori (sync helper)."""
+    return sorted(name for name in os.listdir(dir_path) if name.endswith(".tmp"))
+
+
+def _ctx_with_args(context, args: list[str]) -> MagicMock:
+    """Context baru dengan `bot_data` SHARED dan `args` sendiri (per update, PTB asli).
+
+    `context.args` di PTB per-update; memakai satu context untuk banyak task serentak
+    akan membuat `args` saling tertimpa dan test tidak lagi mewakili produksi.
+    """
+    ctx = MagicMock()
+    ctx.bot_data = context.bot_data  # state bot = satu objek, seperti PTB
+    ctx.bot = context.bot
+    ctx.args = args
+    return ctx
+
+
+async def test_set_user_heavy_concurrent_race_no_lost_update(tmp_path):
+    """REWORK-R3 (integrasi): 10 ronde x 8 `/setUser add` serentak -> file valid, 8 user utuh.
+
+    Probe race QC lama (tmp path identik + tanpa kunci) menghasilkan 2/12 BAD: satu
+    `json.JSONDecodeError` (dua tulis menginterleave satu berkas tmp) dan satu lost
+    update (6/8 key). Loop 10 ronde menekan peluang lulus kebetulan.
+    """
+    settings = make_settings(tmp_path, bot_mode="private", owner_user_id=111)
+    context = make_context(settings, users={})
+
+    users_file = settings.users_file
+
+    for round_index in range(10):
+        context.bot_data["users"] = {}
+        _unlink_if_exists(users_file)
+
+        targets = [5000 + round_index * 100 + offset for offset in range(8)]
+        jobs = []
+        for target in targets:
+            update = make_update(f"/setUser add {target}", user_id=111)
+            jobs.append(set_user(update, _ctx_with_args(context, ["add", str(target)])))
+
+        await asyncio.gather(*jobs)
+
+        # `_read_json_file` = `json.load` asli: JSONDecodeError langsung FAIL (interleave)
+        on_disk = _read_json_file(users_file)
+        assert len(on_disk) == 8, f"round {round_index}: lost update, {len(on_disk)}/8 key"
+        for target in targets:
+            assert str(target) in on_disk
+        assert user_store.load_users(users_file) == context.bot_data["users"]
+        assert stat.S_IMODE(os.stat(users_file).st_mode) == 0o600
+        assert _leftover_tmp(str(tmp_path)) == []
+
+
+async def test_set_user_concurrent_keeps_memory_and_disk_in_sync(tmp_path):
+    """REWORK-R3: snapshot memori == isi berkas setelah banyak add/remove serentak."""
+    settings = make_settings(tmp_path, bot_mode="private", owner_user_id=111)
+    context = make_context(settings, users={})
+
+    jobs = [
+        set_user(
+            make_update(f"/setUser add {7000 + i}", user_id=111),
+            _ctx_with_args(context, ["add", str(7000 + i)]),
+        )
+        for i in range(6)
+    ]
+    await asyncio.gather(*jobs)
+
+    jobs = [
+        set_user(
+            make_update(f"/setUser remove {7000 + i}", user_id=111),
+            _ctx_with_args(context, ["remove", str(7000 + i)]),
+        )
+        for i in range(3)
+    ]
+    await asyncio.gather(*jobs)
+
+    assert context.bot_data["users"] == user_store.load_users(settings.users_file)
+    assert sorted(context.bot_data["users"]) == [7003, 7004, 7005]
+    assert stat.S_IMODE(os.stat(settings.users_file).st_mode) == 0o600
+
+
+def test_write_lock_for_is_per_path_and_stable(tmp_path):
+    """REWORK-R3: kunci per berkas, objek sama untuk path sama, beda untuk path beda."""
+    lock_a = account_mod.write_lock_for(str(tmp_path / "a" / "users.json"))
+    lock_b = account_mod.write_lock_for(str(tmp_path / "a" / "users.json"))
+    lock_c = account_mod.write_lock_for(str(tmp_path / "b" / "users.json"))
+    assert lock_a is lock_b
+    assert lock_a is not lock_c
+    assert isinstance(lock_a, asyncio.Lock)
+
+
+async def test_access_lock_from_bot_data_is_used(tmp_path):
+    """REWORK-R3: `bot_data["access_lock"]` (dibuat main.py) benar-benar dipakai handler."""
+    settings = make_settings(tmp_path, bot_mode="private", owner_user_id=111)
+    context = make_context(settings, users={})
+    sentinel = asyncio.Lock()
+    context.bot_data["access_lock"] = sentinel
+
+    seen: list[bool] = []
+    real_save = user_store.save_users
+
+    def spy_save(path, users):
+        seen.append(sentinel.locked())  # lock wajib sedang dipegang saat menulis
+        return real_save(path, users)
+
+    update = make_update("/setUser add 4242", user_id=111)
+    context.args = ["add", "4242"]
+    with patch.object(user_store, "save_users", side_effect=spy_save):
+        await set_user(update, context)
+
+    assert seen == [True]
 
 
 # ---------------- T-151: validasi config v2.2 ----------------
