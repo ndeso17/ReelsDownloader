@@ -1,5 +1,8 @@
 """Integrasi WP-09 (T-091/T-092/T-093, FR-008, SC §8 butir 5): cleanup file sementara.
 
+WP-17 (T-174): spy `create_task` diganti rekaman antrean kerja (JobCollector);
+assertion pesan + kekosongan direktori tidak diubah sedikit pun.
+
 Handler `download.py` wajib menghapus file di `download_dir` SETELAH upload
 sukses MAUPUN gagal (blok `finally`, AGENTS.md §5 garis merah terakhir).
 `clean_dir` asli dibiarkan jalan; assert langsung `list(dl_dir.iterdir()) == []`
@@ -93,18 +96,51 @@ def _assert_dir_empty(download_dir: Path) -> None:
     assert list(download_dir.iterdir()) == []
 
 
+class JobCollector:
+    """Pola WP-17 (T-174): rekam pekerjaan yang dijadwalkan ke antrean + drain FIFO.
+
+    Ekuivalen mekanik dengan spy `create_task` lama: `collector.jobs` =
+    pekerjaan dijadwalkan, `collector.done` = pekerjaan selesai dieksekusi,
+    `drain()` menunggu `Queue.join()` (tanpa `sleep` untuk correctness).
+    """
+
+    def __init__(self) -> None:
+        self.jobs: list = []
+        self.done: list = []
+        self._real_build = download_mod.build_job
+        self._real_run = download_mod.run_job
+
+    def __call__(self, update, url, context):
+        job = self._real_build(update, url, context)
+        self.jobs.append(job)
+        return job
+
+    async def _run(self, job, *args, **kwargs):
+        try:
+            return await self._real_run(job, *args, **kwargs)
+        finally:
+            self.done.append(job)
+
+    def install(self):
+        return patch.multiple(download_mod, build_job=self, run_job=self._run)
+
+    async def drain(self, timeout_seconds: float = 2.0) -> None:
+        queues: dict[int, asyncio.Queue] = {}
+        for job in self.jobs:
+            queue = getattr(job.context, "bot_data", {}).get("queue")
+            if queue is not None:
+                queues[id(queue)] = queue
+        async with asyncio.timeout(timeout_seconds):
+            await asyncio.gather(*[q.join() for q in queues.values()])
+
+
 @contextlib.contextmanager
-def _patched_job(download_fn, upload_mock, tasks: list[asyncio.Task]):
-    """Patch create_task (rekam task background) + download + send_video."""
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        tasks.append(task)
-        return task
-
+def _patched_job(download_fn, upload_mock, tasks: list[JobCollector]):
+    """Rekam pekerjaan yang dijadwalkan + patch download + send_video (WP-17)."""
+    collector = JobCollector()
+    tasks.append(collector)
     with (
-        patch.object(download_mod.asyncio, "create_task", side_effect=spy),
+        collector.install(),
         patch.object(download_mod.downloader_service, "download", download_fn),
         patch.object(download_mod, "send_video", upload_mock),
     ):
@@ -121,12 +157,12 @@ async def test_cleanup_after_successful_upload(mock_bot, settings):
 
     update = _make_update("https://www.instagram.com/reel/abc/")
     context = _make_context(mock_bot, settings)
-    tasks: list[asyncio.Task] = []
+    tasks: list[JobCollector] = []
     with _patched_job(fake_download, AsyncMock(), tasks):
         await download_handler(update, context)
-        await asyncio.wait_for(tasks[0], timeout=2)
+        await tasks[0].drain()
 
-    assert tasks[0].done() and not tasks[0].cancelled()
+    assert len(tasks[0].done) == len(tasks[0].jobs)
     _assert_dir_empty(dl_dir)
     assert not video.exists()
     mock_bot.send_message.assert_not_awaited()  # tidak ada pesan gagal
@@ -142,13 +178,13 @@ async def test_cleanup_after_failed_upload(mock_bot, settings):
 
     update = _make_update("https://fb.watch/xyz/")
     context = _make_context(mock_bot, settings)
-    tasks: list[asyncio.Task] = []
+    tasks: list[JobCollector] = []
     upload_mock = AsyncMock(side_effect=UploadError("boom"))
     with _patched_job(fake_download, upload_mock, tasks):
         await download_handler(update, context)
-        await asyncio.wait_for(tasks[0], timeout=2)
+        await tasks[0].drain()
 
-    assert tasks[0].done() and not tasks[0].cancelled()
+    assert len(tasks[0].done) == len(tasks[0].jobs)
     _assert_dir_empty(dl_dir)
     mock_bot.send_message.assert_awaited_once()
     sent = mock_bot.send_message.call_args.kwargs
@@ -166,13 +202,13 @@ async def test_cleanup_after_download_failure(mock_bot, settings):
 
     update = _make_update("https://www.instagram.com/reel/abc/")
     context = _make_context(mock_bot, settings)
-    tasks: list[asyncio.Task] = []
+    tasks: list[JobCollector] = []
     with _patched_job(failing_download, AsyncMock(), tasks):
         await download_handler(update, context)
-        await asyncio.wait_for(tasks[0], timeout=2)
+        await tasks[0].drain()
 
     # task tidak boleh mati (NFR Reliability: 1 URL gagal -> bot hidup)
-    assert tasks[0].done() and not tasks[0].cancelled()
+    assert len(tasks[0].done) == len(tasks[0].jobs)
     _assert_dir_empty(dl_dir)
     assert not partial.exists()
 
@@ -191,7 +227,7 @@ async def test_cleanup_failure_logged_not_fatal(mock_bot, settings, caplog):
 
     update = _make_update("https://www.instagram.com/reel/abc/")
     context = _make_context(mock_bot, settings)
-    tasks: list[asyncio.Task] = []
+    tasks: list[JobCollector] = []
     boom = MagicMock(side_effect=PermissionError("permission denied"))
     caplog.set_level(logging.WARNING, logger="app.handlers.download")
     with (
@@ -199,9 +235,9 @@ async def test_cleanup_failure_logged_not_fatal(mock_bot, settings, caplog):
         patch.object(download_mod, "clean_dir", boom),
     ):
         await download_handler(update, context)
-        await asyncio.wait_for(tasks[0], timeout=2)
+        await tasks[0].drain()
 
-    assert tasks[0].done() and not tasks[0].cancelled()
+    assert len(tasks[0].done) == len(tasks[0].jobs)
     assert "cleanup" in caplog.text
     # baris sumber pesan (§5: traceback lengkap hanya ke log)
     assert any("cleanup" in r.getMessage() and r.levelno == logging.WARNING for r in caplog.records)

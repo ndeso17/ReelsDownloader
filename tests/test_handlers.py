@@ -8,19 +8,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.config import Settings
-from app.handlers import download as download_mod
 from app.handlers.download import download_handler
 from app.handlers.start import help_command, start
 from app.services import downloader as downloader_service
 from app.services.downloader import DownloadResult
 from app.services.errors import DownloadFailedError
 from app.services.rate_limiter import UserRateLimiter
+from tests.queue_support import JobCollector
 
 VALID_URL = "https://www.instagram.com/reel/xxxxx/"
 START_MARKER = "👋 Instagram/Facebook Downloader"
@@ -129,14 +130,15 @@ async def test_unsupported_url_replies_error(rl, settings):
 
 
 async def test_rate_limited_replies_retry_after(rl, settings):
+    collector = JobCollector(worker_count=1)
     first = make_update(VALID_URL)
-    with patch.object(download_mod.asyncio, "create_task") as task1:
+    with collector.install():
         await download_handler(first, make_context(rl, settings))
-    task1.assert_called_once()
-    task1.call_args.args[0].close()  # jangan jalankan job di test ini
+    assert collector.scheduled >= 1, "request pertama masuk antrean"
+    collector.close_pending()  # jangan jalankan job di test ini
 
     blocked = make_update(VALID_URL)
-    with patch.object(download_mod.asyncio, "create_task") as task2:
+    with collector.install():
         await download_handler(blocked, make_context(rl, settings))
 
     texts = reply_texts(blocked)
@@ -144,24 +146,25 @@ async def test_rate_limited_replies_retry_after(rl, settings):
     assert "Terlalu sering" in texts[0]
     assert "coba lagi dalam" in texts[0] and "detik" in texts[0]
     assert "10.0" in texts[0]  # retry_after dari jam frozen
-    task2.assert_not_called()  # job tidak boleh dibuat saat dibatasi
+    assert collector.scheduled == 0, "job tidak dijadwalkan saat rate-limited"
 
 
 # ---------------- T-063 URL valid → ack '⏳' + create_task ----------------
 
 
 async def test_valid_url_acks_and_spawns_task(rl, settings):
+    collector = JobCollector(worker_count=1)
     update = make_update(f"tolong unduh {VALID_URL} dong")
     with (
-        patch.object(download_mod.asyncio, "create_task") as mock_task,
+        collector.install(),
         patch.object(downloader_service, "download", AsyncMock()),
     ):
         await download_handler(update, make_context(rl, settings))
+        await collector.drain()
 
     assert "⏳ Sedang memproses..." in reply_texts(update)
-    mock_task.assert_called_once()
+    assert collector.scheduled >= 1, "pekerjaan dijadwalkan"
     assert set(rl.last_map) == {123456}  # acquire lolos sebelum ack
-    mock_task.call_args.args[0].close()
 
 
 # ---------------- NFR Performance: handler return sebelum download selesai ----------------
@@ -174,23 +177,21 @@ async def test_handler_returns_before_download_finishes(rl, settings):
         await gate.wait()
         return DownloadResult(path=Path(_settings.download_dir) / "x.mp4", metadata={})
 
+    collector = JobCollector(worker_count=1)
     update = make_update(VALID_URL)
-    jobs: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        jobs.append(task)
-        return task
 
     with (
-        patch.object(download_mod.asyncio, "create_task", side_effect=spy),
+        collector.install(),
         patch.object(downloader_service, "download", slow_download),
     ):
+        start = time.monotonic()
         await download_handler(update, make_context(rl, settings))  # harus langsung return
-        assert jobs and not jobs[0].done()  # ack < 2 dtk; berat di latar belakang
+        elapsed = time.monotonic() - start
+        assert elapsed < 2.0, f"handler > 2dtk ({elapsed:.3f})"
+        assert collector.scheduled == 1, "pekerjaan dijadwalkan"
+        assert not collector.done, "download belum mulai saat handler balik"
         gate.set()
-        await jobs[0]
+        await collector.drain()
 
 
 # ---------------- NFR Reliability: task gagal → di-log, loop tidak crash ----------------
@@ -200,22 +201,13 @@ async def test_failed_download_job_is_logged_not_raised(rl, settings, caplog):
     async def boom(url, _settings):
         raise DownloadFailedError("simulasi yt-dlp mati")
 
+    collector = JobCollector(worker_count=1)
     update = make_update(VALID_URL)
-    jobs: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        jobs.append(task)
-        return task
 
     with caplog.at_level(logging.ERROR, logger="app.handlers.download"):
-        with (
-            patch.object(download_mod.asyncio, "create_task", side_effect=spy),
-            patch.object(downloader_service, "download", boom),
-        ):
+        with collector.install(), patch.object(downloader_service, "download", boom):
             await download_handler(update, make_context(rl, settings))
-            await asyncio.wait_for(jobs[0], timeout=1)
+            await asyncio.wait_for(collector.drain(), timeout=2)
 
-    assert jobs[0].done() and not jobs[0].cancelled()  # exception tertangkap di _job
+    assert collector.done, "job selesai dieksekusi"
     assert "simulasi yt-dlp mati" in caplog.text  # traceback/penyebab masuk log

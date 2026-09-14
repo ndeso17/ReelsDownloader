@@ -20,6 +20,7 @@ from app.handlers.start import help_command, start
 from app.services.rate_limiter import UserRateLimiter
 from app.services.stats import Stats
 from app.services.user_store import load_users
+from app.services.work_queue import ensure_workers, stop_workers
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +33,17 @@ def configure_logging(level: str) -> None:
 
 
 async def _flush_stats(application) -> None:
-    """T-166 (FR-021): persist statistik saat aplikasi dimatikan.
+    """T-166 + WP-17 (FR-022): matikan worker, lalu persist statistik.
 
-    `Stats.save` sudah tidak pernah raise (pola WP-15) dan I/O sinkron dibungkus
-    `asyncio.to_thread` (AGENTS.md §4.4). Statistik yang tidak bisa disimpan tidak
-    boleh menghentikan shutdown, jadi kegagalan hanya di-log oleh `Stats.save`.
-    Bila `settings` tidak punya `stats_file` (`getattr(..., None)` → `None`), flush
-    dilewati supaya test lama tidak menulis ke CWD. `model_construct()` default
-    stats_file = `"stats.json"`, jadi kalau dipakai eksplisit akan menulis ke cwd
-    (itu sengaja dibuat exception di bawah agar terdeteksi saat regression).
+    `stop_workers` disiapkan dulu supaya tidak ada task worker yatim setelah
+    loop ditutup. Kegagalan matikan worker/append-only tidak boleh menghalangi
+    flush statistik, jadi keduanya di-`try`/`except` terpisah.
     """
+    try:
+        await stop_workers(application.bot_data)
+    except Exception:
+        logger.warning("stop_workers gagal saat shutdown", exc_info=True)
+    # Lanjut ke persisteni statistik walau worker shutdown bentrok.
     stats_service = application.bot_data.get("stats")
     if stats_service is None:
         return
@@ -85,6 +87,21 @@ async def main() -> None:
     application.bot_data["semaphore"] = asyncio.Semaphore(settings.max_concurrent_downloads)
     application.bot_data["settings"] = settings
 
+    # WP-17 (FR-022): antrean kerja in-process + admission control anti-OOM.
+    # `maxsize` membatasi jumlah job tertunda; handler menolak dengan pesan
+    # `MSG_QUEUE_FULL` saat penuh (T-172). Worker start/stop terjadi di sini
+    # supaya satu event-loop punya queue + worker yang sama (pelajaran T-111).
+    from app.handlers.download import _notify_chat as _download_notify
+    from app.handlers.download import run_job as _download_run_job
+
+    application.bot_data["queue"] = asyncio.Queue(maxsize=settings.queue_max_size)
+    application.bot_data["stop_event"] = asyncio.Event()
+    application.bot_data["workers"] = ensure_workers(
+        application.bot_data,
+        run_job=_download_run_job,
+        notify=_download_notify,
+    )
+
     # WP-06: handler /start, /help, deteksi URL (FR-001..FR-003, FR-011).
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
@@ -110,6 +127,11 @@ async def main() -> None:
     # kolom yang benar-benar persist (`first_seen`) sudah di-flush atomik tepat saat
     # usernya tercatat di `app/handlers/start.py`, sementara `processed`/`rejected`
     # memang counter sejak-restart (keputusan Executor, lihat Log WP-16).
+    application.post_shutdown = _flush_stats
+
+    # WP-17 (T-173, FR-022): worker dimatikan dulu di `_flush_stats` sebelum loop
+    # ditutup supaya tidak ada task yatim. `stop_workers` memanggil `gather`
+    # `return_exceptions=True`; hasil cancel sudah direap.
     application.post_shutdown = _flush_stats
     # T-156 (FR-016): daftar command Telegram disinkronkan dengan menu v2.2
     # (set_my_commands butuh bot ter-initialize; bukan jalur request). Sinkronisasi

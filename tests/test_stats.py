@@ -48,6 +48,7 @@ from app.services.stats import (
     build_new_user_message,
     notify_new_user,
 )
+from tests.queue_support import JobCollector
 
 DUMMY_TOKEN = SecretStr(" ".join(["dummy", "token"]))  # bukan kredensial nyata
 VALID_URL = "https://www.instagram.com/reel/xxxxx/"
@@ -779,21 +780,14 @@ async def test_successful_job_increments_processed(tmp_path):
     result = DownloadResult(
         path=Path(_settings.download_dir) / "v.mp4", metadata={"title": "contoh"}
     )
-    jobs: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        jobs.append(task)
-        return task
-
+    collector = JobCollector(worker_count=1)
     with (
-        patch.object(download_mod.asyncio, "create_task", side_effect=spy),
+        collector.install(),
         patch.object(downloader_service, "download", AsyncMock(return_value=result)),
         patch.object(download_mod, "send_video", AsyncMock()),
     ):
         await download_handler(make_update(VALID_URL, user_id=OWNER_ID), context)
-        await asyncio.wait_for(asyncio.gather(*jobs), timeout=DRAIN_TIMEOUT)
+        await collector.drain()
 
     assert stats.processed == 1
     assert stats.rejected == 0
@@ -801,23 +795,14 @@ async def test_successful_job_increments_processed(tmp_path):
 
 async def test_failed_job_counts_download_failed_not_processed(tmp_path):
     _settings, stats, context = _download_context(tmp_path, users={OWNER_ID: "Owner"})
-    jobs: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        jobs.append(task)
-        return task
+    collector = JobCollector(worker_count=1)
 
     async def boom(url, _settings):
         raise DownloadFailedError("simulasi yt-dlp mati")
 
-    with (
-        patch.object(download_mod.asyncio, "create_task", side_effect=spy),
-        patch.object(downloader_service, "download", boom),
-    ):
+    with collector.install(), patch.object(downloader_service, "download", boom):
         await download_handler(make_update(VALID_URL, user_id=OWNER_ID), context)
-        await asyncio.wait_for(asyncio.gather(*jobs), timeout=DRAIN_TIMEOUT)
+        await collector.drain()
 
     assert stats.rejected_reasons == {"download_failed": 1}
     assert stats.processed == 0
@@ -826,24 +811,18 @@ async def test_failed_job_counts_download_failed_not_processed(tmp_path):
 async def test_failed_upload_counts_download_failed_not_processed(tmp_path):
     _settings, stats, context = _download_context(tmp_path, users={OWNER_ID: "Owner"})
     result = DownloadResult(path=Path(_settings.download_dir) / "v.mp4", metadata={})
-    jobs: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        jobs.append(task)
-        return task
+    collector = JobCollector(worker_count=1)
 
     async def bad_upload(**kwargs):
         raise UploadError("upload ditolak")
 
     with (
-        patch.object(download_mod.asyncio, "create_task", side_effect=spy),
+        collector.install(),
         patch.object(downloader_service, "download", AsyncMock(return_value=result)),
         patch.object(download_mod, "send_video", bad_upload),
     ):
         await download_handler(make_update(VALID_URL, user_id=OWNER_ID), context)
-        await asyncio.wait_for(asyncio.gather(*jobs), timeout=DRAIN_TIMEOUT)
+        await collector.drain()
 
     assert stats.processed == 0
     assert stats.rejected_reasons == {"download_failed": 1}
@@ -877,11 +856,10 @@ def test_create_task_for_notifications_lives_only_in_start_module():
 
     assert "notify_new_user" in start_src
     assert "asyncio.create_task" in start_src
-    # `download.py` tetap punya create_task lamanya (milik WP-06..WP-10) tapi
-    # tidak boleh ada notifikasi stats di sana.
+    # `download.py` sudah tidak lagi spawn task per request (WP-17 FR-022).
     assert "notify_new_user" not in download_src
     assert "notify_new_user" not in account_src
-    assert download_src.count("asyncio.create_task(") == 1
+    assert download_src.count("asyncio.create_task(") == 0
 
 
 def test_wp16_sources_have_no_typographic_dashes():

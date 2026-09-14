@@ -97,28 +97,56 @@ def fake_result(settings: Settings) -> DownloadResult:
 
 
 class JobCollector:
-    """Merekam coroutine `_job()` yang di-spawn handler (`create_task` spy).
+    """Merekam PEKERJAAN yang dijadwalkan handler ke antrean kerja (WP-17, T-174).
 
-    Handler WP-06/11 memanggil `asyncio.create_task(_job())`; test perlu
-    pegangan ke Task-nya untuk menunggu selesai tanpa `sleep`.
+    Adaptasi mekanik dari spy `create_task` lama: handler WP-17 tidak
+    men-spawn task per request lagi, ia memanggil `build_job(...)` lalu
+    `queue.put_nowait(...)`. Jadi collector kini membungkus `build_job`
+    (pekerjaan dijadwalkan) dan `run_job` (pekerjaan selesai dieksekusi
+    worker), dan `drain()` menunggu lewat `Queue.join()` milik antrean yang
+    direkam, bukan `gather(*tasks)`.
+
+    Makna assertion tidak berubah: `jobs` == pekerjaan yang dijadwalkan
+    (dulu `tasks`), `done` == pekerjaan yang selesai (dulu `task.done()`),
+    `drain()` == tunggu sampai selesai, tetap tanpa `sleep` untuk correctness.
     """
 
     def __init__(self) -> None:
-        self.tasks: list[asyncio.Task] = []
-        self._real = asyncio.create_task
-
-    def __call__(self, coro):
-        task = self._real(coro)
-        self.tasks.append(task)
-        return task
+        self.jobs: list = []
+        self.done: list = []
+        self._real_build = None
 
     def install(self):
-        return patch.object(download_mod.asyncio, "create_task", side_effect=self)
+        """Patch `build_job` + `run_job` di modul handler (satu context manager)."""
+        self._real_build = download_mod.build_job
+        real_run = download_mod.run_job
+
+        def build_spy(update, url, context):
+            job = self._real_build(update, url, context)
+            self.jobs.append(job)
+            return job
+
+        async def run_spy(job, *args, **kwargs):
+            try:
+                return await real_run(job, *args, **kwargs)
+            finally:
+                self.done.append(job)
+
+        return patch.multiple(download_mod, build_job=build_spy, run_job=run_spy)
 
     async def drain(self) -> None:
-        """Tunggu semua job yang direkam, `asyncio.timeout` (ruff ASYNC109)."""
+        """Tunggu SELURUH pekerjaan yang direkam selesai (FIFO, tanpa `sleep`).
+
+        `Queue.join()` kembali setelah `task_done()` terakhir di worker, jadi
+        ini ekuivalen persis dengan `await gather(*tasks)` lama.
+        """
+        queues: dict[int, asyncio.Queue] = {}
+        for job in self.jobs:
+            queue = getattr(job.context, "bot_data", {}).get("queue")
+            if queue is not None:
+                queues[id(queue)] = queue
         async with asyncio.timeout(DRAIN_SECONDS):
-            await asyncio.gather(*self.tasks)
+            await asyncio.gather(*[q.join() for q in queues.values()])
 
 
 def gated_download(
@@ -161,7 +189,7 @@ async def test_three_requests_run_two_concurrently_third_waits(settings, rl):
     ):
         for update, context in zip(updates, contexts, strict=True):
             await download_handler(update, context)
-        assert len(collector.tasks) == 3
+        assert len(collector.jobs) == 3
 
         # dua slot pertama terisi; slot ketiga TIDAK boleh masuk sebelum ada pelepasan
         await asyncio.wait_for(entered[0].wait(), timeout=2.0)
@@ -254,7 +282,7 @@ async def test_handler_acks_in_under_two_seconds_with_10s_download(settings, rl)
         assert not entered[0].is_set()
 
         # pekerjaan berat masih tertunda di latar belakang saat handler return
-        assert collector.tasks and not collector.tasks[0].done()
+        assert collector.jobs and not collector.done
 
         hold.set()
         await collector.drain()
@@ -321,7 +349,9 @@ async def test_one_failing_url_does_not_crash_the_loop(settings, rl, caplog):
 
         loop = asyncio.get_running_loop()
         assert not loop.is_closed(), "event loop mati setelah satu job gagal"
-        assert all(task.done() and not task.cancelled() for task in collector.tasks)
+        assert len(collector.done) == len(collector.jobs), (
+            "job berhenti di tengah (worker mati diam-diam)"
+        )
 
     # pengguna: ack + pesan error bersih (bukan traceback / isi exception mentah)
     assert ACK_TEXT in reply_texts(failing)

@@ -7,7 +7,6 @@ jaringan nyata (AGENTS.md §4.6).
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -30,6 +29,7 @@ from app.services.errors import (
     user_message,
 )
 from app.services.validator import UnsupportedUrlError
+from tests.queue_support import JobCollector
 
 #: Isi exception mentah yang dipakai pemantik di bawah: tidak boleh bocor.
 RAW = "Detail mentah: /home/app/secret.mp4 Traceback most recent call last"
@@ -123,27 +123,17 @@ def settings(tmp_path) -> Settings:
 
 
 async def _run_failing_job(bot, settings, exc: Exception):
-    """Jalankan handler dengan download yang melempar *exc*; kembalikan task job."""
+    """Jalankan handler dengan download yang melempar *exc*; kembalikan collector."""
     update = _make_update(VALID_URL)
 
     async def boom(url, _settings):
         raise exc
 
-    tasks: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        tasks.append(task)
-        return task
-
-    with (
-        patch.object(download_mod.asyncio, "create_task", side_effect=spy),
-        patch.object(downloader_service, "download", boom),
-    ):
+    collector = JobCollector(worker_count=1)
+    with collector.install(), patch.object(downloader_service, "download", boom):
         await download_handler(update, _make_context(bot, settings))
-        await asyncio.wait_for(tasks[0], timeout=2)
-    return tasks[0], update
+        await collector.drain()
+    return collector, update
 
 
 @pytest.mark.parametrize(
@@ -160,8 +150,8 @@ async def _run_failing_job(bot, settings, exc: Exception):
 )
 async def test_job_failure_replies_clean_user_message(mock_bot, settings, exc, expected):
     """T-103 (FR-009 + NFR Reliability): job gagal -> pesan bersih, task tetap hidup."""
-    task, update = await _run_failing_job(mock_bot, settings, exc)
-    assert task.done() and not task.cancelled()  # bot tidak crash
+    collector, update = await _run_failing_job(mock_bot, settings, exc)
+    assert collector.done, "job selesai dieksekusi"
     mock_bot.send_message.assert_awaited_once()
     sent = mock_bot.send_message.call_args.kwargs
     assert sent["chat_id"] == 123456
@@ -184,23 +174,16 @@ async def test_metadata_sanitized_before_send_video(mock_bot, settings):
     async def fake_download(url, _settings):
         return DownloadResult(path=video, metadata={"title": dirty_title, "uploader": "\x01x"})
 
+    collector = JobCollector(worker_count=1)
     update = _make_update(VALID_URL)
-    tasks: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        tasks.append(task)
-        return task
-
     upload = AsyncMock()
     with (
-        patch.object(download_mod.asyncio, "create_task", side_effect=spy),
+        collector.install(),
         patch.object(downloader_service, "download", fake_download),
         patch.object(download_mod, "send_video", upload),
     ):
         await download_handler(update, _make_context(mock_bot, settings))
-        await asyncio.wait_for(tasks[0], timeout=2)
+        await collector.drain()
 
     kwargs = upload.await_args.kwargs
     assert kwargs["metadata"]["uploader"] == "x"

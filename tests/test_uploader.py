@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -14,6 +13,7 @@ from app.config import Settings
 from app.services.downloader import DownloadResult
 from app.services.errors import UploadError
 from app.services.uploader import build_caption, send_video
+from tests.queue_support import JobCollector
 
 
 @pytest.fixture
@@ -191,21 +191,14 @@ async def test_handler_uploads_after_download(mock_bot, tmp_path, settings):
     async def fake_download(url, _settings):
         return DownloadResult(path=video, metadata={"title": "judul reels"})
 
+    collector = JobCollector(worker_count=1)
     update = _make_update("https://www.instagram.com/reel/xxx/")
-    jobs: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        jobs.append(task)
-        return task
-
     with (
-        patch.object(download_mod.asyncio, "create_task", side_effect=spy),
+        collector.install(),
         patch.object(download_mod.downloader_service, "download", fake_download),
     ):
         await download_handler(update, _make_context(mock_bot, settings))
-        await asyncio.wait_for(jobs[0], timeout=2)
+        await collector.drain()
 
     mock_bot.send_video.assert_awaited_once()
     call = mock_bot.send_video.call_args
@@ -227,17 +220,10 @@ async def test_handler_replies_error_message_when_upload_fails(mock_bot, tmp_pat
     async def fake_download(url, _settings):
         return DownloadResult(path=video, metadata={"title": "judul"})
 
+    collector = JobCollector(worker_count=1)
     update = _make_update("https://fb.watch/abc")
-    jobs: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        jobs.append(task)
-        return task
-
     with (
-        patch.object(download_mod.asyncio, "create_task", side_effect=spy),
+        collector.install(),
         patch.object(download_mod.downloader_service, "download", fake_download),
         patch.object(
             download_mod,
@@ -246,7 +232,7 @@ async def test_handler_replies_error_message_when_upload_fails(mock_bot, tmp_pat
         ),
     ):
         await download_handler(update, _make_context(mock_bot, settings))
-        await asyncio.wait_for(jobs[0], timeout=2)
+        await collector.drain()
 
     mock_bot.send_message.assert_awaited_once()
     sent = mock_bot.send_message.call_args.kwargs
@@ -269,27 +255,20 @@ async def test_handler_unclassified_upload_error_logged_and_replies(
     async def fake_download(url, _settings):
         return DownloadResult(path=video, metadata={"title": "judul"})
 
+    collector = JobCollector(worker_count=1)
     update = _make_update("https://www.instagram.com/reel/xxx/")
-    jobs: list[asyncio.Task] = []
-    real_create_task = asyncio.create_task
-
-    def spy(coro):
-        task = real_create_task(coro)
-        jobs.append(task)
-        return task
-
     with caplog.at_level(logging.ERROR, logger="app.handlers.download"):
         with (
-            patch.object(download_mod.asyncio, "create_task", side_effect=spy),
+            collector.install(),
             patch.object(download_mod.downloader_service, "download", fake_download),
             patch.object(
                 download_mod, "send_video", AsyncMock(side_effect=RuntimeError("salah total"))
             ),
         ):
             await download_handler(update, _make_context(mock_bot, settings))
-            await asyncio.wait_for(jobs[0], timeout=2)
+            await collector.drain()
 
-    assert jobs[0].done() and not jobs[0].cancelled()
+    assert collector.done, "job selesai dieksekusi"
     assert "salah total" in caplog.text  # detail masuk log, bukan ke user
     mock_bot.send_message.assert_awaited_once()
     assert mock_bot.send_message.call_args.kwargs["text"] == "⚠️ Gagal mengirim video."

@@ -249,12 +249,12 @@ async def test_download_gate_blocks_stranger_before_rate_limiter(tmp_path):
     limiter.acquire = AsyncMock()
     context = make_context(settings, users={}, rate_limiter=limiter)
 
-    with patch.object(download_mod.asyncio, "create_task") as mock_task:
+    with patch.object(download_mod, "build_job", wraps=download_mod.build_job) as build_spy:
         await download_handler(update, context)
 
     assert update.message.reply_text.call_args.args[0] == MSG_ACCESS_DENIED
     limiter.acquire.assert_not_called()
-    mock_task.assert_not_called()
+    assert build_spy.call_count == 0, "pekerjaan tidak dijadwalkan saat access denied"
 
 
 # ---------------- (l) public tanpa kunci `users` -> jalur lama, ack muncul ----------------
@@ -269,12 +269,11 @@ async def test_download_public_without_users_key_still_acks(tmp_path):
     context.bot = MagicMock()
     context.bot.send_message = AsyncMock()
 
-    with patch.object(download_mod.asyncio, "create_task") as mock_task:
+    with patch.object(download_mod, "build_job", wraps=download_mod.build_job) as build_spy:
         await download_handler(update, context)
 
     assert any("⏳" in c.args[0] for c in update.message.reply_text.call_args_list)
-    mock_task.assert_called_once()
-    mock_task.call_args.args[0].close()
+    assert build_spy.call_count == 1, "pekerjaan dijadwalkan di jalur public"
 
 
 # ---------------- (m) round-trip user_store ----------------
