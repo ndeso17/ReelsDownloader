@@ -86,3 +86,6 @@ users.json
 users.json.tmp
 stats.json
 stats.json.tmp
+
+## Artefak tool lokal (bukan bagian produk; APPEND ONLY)
+.omo/
