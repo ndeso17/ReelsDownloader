@@ -15,13 +15,14 @@ from app.services.stats import build_new_user_message, notify_new_user
 logger = logging.getLogger(__name__)
 
 _WELCOME_TEXT = (
-    "👋 Instagram/Facebook Downloader\n"
+    "👋 Instagram/Facebook/TikTok Downloader\n"
     "\n"
-    "Kirim link Instagram atau Facebook Reels\n"
+    "Kirim link Instagram, Facebook, atau TikTok Reels\n"
     "dan saya akan mencoba mengunduh videonya.\n"
     "\n"
     "Contoh:\n"
-    "https://www.instagram.com/reel/xxxxx/"
+    "https://www.instagram.com/reel/xxxxx/\n"
+    "https://www.tiktok.com/@user/video/1234567890"
 )
 
 #: T-155 (FR-016): blok menu ringkas yang digabung ke /start, dikirim terpisah
@@ -95,8 +96,9 @@ async def help_command(update, context):
         "• /help, panduan ini\n"
         "• /getID, lihat Telegram ID kamu (publik)\n"
         "• /menu, daftar command + status akses (publik)\n"
-        "• Kirim URL Instagram atau Facebook Reels untuk mengunduh video\n"
+        "• Kirim URL Instagram, Facebook, atau TikTok Reels untuk mengunduh video\n"
         "\n"
         "Contoh URL:\n"
-        "https://www.instagram.com/reel/xxxxx/"
+        "https://www.instagram.com/reel/xxxxx/\n"
+        "https://www.tiktok.com/@user/video/1234567890"
     )

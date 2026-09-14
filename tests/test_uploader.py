@@ -87,6 +87,19 @@ def test_build_caption_empty_title():
     assert cap == "🎬 \n\nSource: Instagram"
 
 
+# ---- T-182: TikTok caption (FR-007/FR-020) ----
+
+
+def test_build_caption_tiktok_exact_capitalization():
+    cap = build_caption("tt vid", "https://www.tiktok.com/@user/video/123")
+    assert cap == "🎬 tt vid\n\nSource: TikTok"
+
+
+def test_build_caption_tiktok_empty_title():
+    cap = build_caption("", "https://vm.tiktok.com/ZdXy9/")
+    assert cap == "🎬 \n\nSource: TikTok"
+
+
 # ---- send_video: sukses < 50 MB (T-084) ----
 
 

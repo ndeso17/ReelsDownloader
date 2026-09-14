@@ -25,13 +25,19 @@ logger = logging.getLogger(__name__)
 UPLOAD_TIMEOUT_SECONDS = 30
 
 
-def build_caption(title: str, url: str) -> str:
-    """Caption FR-007: ``🎬 {title}\\n\\nSource: Instagram|Facebook``.
+#: FR-007/FR-020: nama tampilan platform di caption. Peta eksplisit, bukan
+#: `.capitalize()` (itu menghasilkan "Tiktok" yang salah kapitalisasi).
+_PLATFORM_DISPLAY = {"instagram": "Instagram", "facebook": "Facebook", "tiktok": "TikTok"}
 
-    ``{platform}`` dari ``detect_platform()`` (T-038) di-capitalisasi; title
-    kosong tetap menghasilkan caption valid (bukan string kosong).
+
+def build_caption(title: str, url: str) -> str:
+    """Caption FR-007: ``🎬 {title}\\n\\nSource: Instagram|Facebook|TikTok``.
+
+    ``{platform}`` dari ``detect_platform()`` (T-038/T-182) dipetakan lewat
+    ``_PLATFORM_DISPLAY``; title kosong tetap menghasilkan caption valid (bukan
+    string kosong).
     """
-    platform = detect_platform(url).capitalize()
+    platform = _PLATFORM_DISPLAY[detect_platform(url)]
     return f"🎬 {title}\n\nSource: {platform}"
 
 

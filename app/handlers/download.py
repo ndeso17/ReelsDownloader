@@ -59,13 +59,14 @@ TASK_COUNTER_KEY = "task_counter"
 JOB_RUNTIME_KEY = "job_runtime"
 
 _START_TEXT = (
-    "👋 Instagram/Facebook Downloader\n"
+    "👋 Instagram/Facebook/TikTok Downloader\n"
     "\n"
-    "Kirim link Instagram atau Facebook Reels\n"
+    "Kirim link Instagram, Facebook, atau TikTok Reels\n"
     "dan saya akan mencoba mengunduh videonya.\n"
     "\n"
     "Contoh:\n"
-    "https://www.instagram.com/reel/xxxxx/"
+    "https://www.instagram.com/reel/xxxxx/\n"
+    "https://www.tiktok.com/@user/video/1234567890"
 )
 
 

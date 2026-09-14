@@ -86,3 +86,58 @@ def test_detect_platform_facebook():
 def test_detect_platform_rejects_unknown():
     with pytest.raises(UnsupportedUrlError):
         detect_platform("https://evil.com/x")
+
+
+# ---- T-181/T-184: TikTok (FR-020) ----
+
+TIKTOK_HOSTS = [
+    "https://www.tiktok.com/@user/video/1234567890",
+    "https://tiktok.com/@user/video/1234567890",
+    "https://vm.tiktok.com/ZdXy9/",
+    "https://vt.tiktok.com/ZdXy9/",
+]
+
+
+@pytest.mark.parametrize("url", TIKTOK_HOSTS)
+def test_validate_url_tiktok_accepted(url):
+    assert isinstance(validate_url(url), str)
+
+
+@pytest.mark.parametrize("url", TIKTOK_HOSTS)
+def test_detect_platform_tiktok(url):
+    assert detect_platform(url) == "tiktok"
+
+
+def test_validate_url_tiktok_shortlink_passthrough():
+    """Shortlink vm/vt diterima apa adanya (FR-020) — yt-dlp yang resolve."""
+    normalized = validate_url("https://vm.tiktok.com/ZdXy9/")
+    assert normalized == "https://vm.tiktok.com/ZdXy9/"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.tiktok.co/@user/video/1",
+        "https://tiktokv.com/@user/video/1",
+        "https://tiktok.example.com/evil",
+        "https://example-tiktok.com/x",
+        "https://evil.tiktok.com/x",
+    ],
+)
+def test_validate_url_tiktok_lookalikes_rejected(url):
+    """Exact-match host: turunan/serupa tetap ditolak (FR-004)."""
+    with pytest.raises(UnsupportedUrlError):
+        validate_url(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.tiktok.co/@user/video/1",
+        "https://tiktokv.com/@user/video/1",
+        "https://evil.tiktok.com/x",
+    ],
+)
+def test_detect_platform_tiktok_lookalikes_rejected(url):
+    with pytest.raises(UnsupportedUrlError):
+        detect_platform(url)

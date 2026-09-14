@@ -35,7 +35,10 @@ from tests.queue_support import JobCollector
 RAW = "Detail mentah: /home/app/secret.mp4 Traceback most recent call last"
 
 MESSAGES = [
-    pytest.param(UnsupportedUrlError(RAW), "❌ URL tidak didukung. Kirim link Instagram/Facebook."),
+    pytest.param(
+        UnsupportedUrlError(RAW),
+        "❌ URL tidak didukung. Kirim link Instagram/Facebook/TikTok.",
+    ),
     pytest.param(ValueError(RAW), "❌ URL tidak valid"),
     pytest.param(PrivateVideoError(RAW), "🔒 Video private/terbatas."),
     pytest.param(VideoNotFoundError(RAW), "🔍 Video tidak ditemukan."),
