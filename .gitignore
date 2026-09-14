@@ -89,3 +89,9 @@ stats.json.tmp
 
 ## Artefak tool lokal (bukan bagian produk; APPEND ONLY)
 .omo/
+
+## Dokumen internal pipeline (lokal, tidak ikut repo publik)
+Arsitektur.md
+ArsitekturRules.md
+PRD.md
+Struktur.md

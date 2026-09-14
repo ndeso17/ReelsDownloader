@@ -361,30 +361,6 @@ Masalah umum lain:
   `yt-dlp`; `pip install -U yt-dlp` lalu rebuild image.
 - **Dialog advance tidak bisa dilanjutkan setelah restart** → state `DialogState`
   in-memory; restart = reset. Kirim `/advance` ulang.
-
-## Batasan
-
-Sesuai PRD §6 (Not Included) bukan bug, memang di luar MVP:
-
-- Tanpa database, tanpa akun user permanen, tanpa riwayat download persisten, tanpa
-  quota/statistik untuk user umum (statistik hanya admin, PRD §7), tanpa admin
-  dashboard, tanpa pembayaran.
-- Tanpa Redis dan tanpa worker terpisah (ARSITEKTUR.md menggambarkan itu untuk V2
-  lanjut, bukan target v2.2 ini).
-- Tanpa autentikasi Instagram/Facebook/TikTok dan tanpa scraping akun privat.
-- Kualitas video/audio bisa dipilih lewat `/advance` (FR-015..FR-018), tetapi tanpa
-  progres persen, tanpa thumbnail kustom, dan hasil = kualitas TEKENA bila sumber
-  tidak menyediakan kualitas diminta (ada di caption).
-- Domain didukung terbatas pada 10 host whitelist (`instagram.com`,
-  `www.instagram.com`, `facebook.com`, `www.facebook.com`, `m.facebook.com`,
-  `fb.watch`, `tiktok.com`, `www.tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com`);
-  dukungan aktual bergantung pada kemampuan extractor `yt-dlp` dan perubahan
-  platform (PRD §2, §9).
-- Limit concurrency/rate/queue bersifat in-memory: reset saat restart dan tidak
-  dibagi antar replika.
-- State dialog advance (FR-015..FR-018) in-memory: reset saat restart.
-- File sementara hidup hanya selama job; tidak ada cache/arsip download.
-
 ## Legal
 
 Bot ini ditujukan untuk konten publik atau konten yang pengguna berhak
