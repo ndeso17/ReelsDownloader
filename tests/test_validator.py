@@ -109,7 +109,7 @@ def test_detect_platform_tiktok(url):
 
 
 def test_validate_url_tiktok_shortlink_passthrough():
-    """Shortlink vm/vt diterima apa adanya (FR-020) — yt-dlp yang resolve."""
+    """Shortlink vm/vt diterima apa adanya (FR-020) - yt-dlp yang resolve."""
     normalized = validate_url("https://vm.tiktok.com/ZdXy9/")
     assert normalized == "https://vm.tiktok.com/ZdXy9/"
 

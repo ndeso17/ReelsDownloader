@@ -50,7 +50,7 @@ def _make_bot_data(queue_size: int) -> dict[str, Any]:
 
 
 def make_update():
-    """Siasat untuk `build_job` — mock minimal dengan `effective_chat.id`."""
+    """Siasat untuk `build_job` - mock minimal dengan `effective_chat.id`."""
     update = MagicMock()
     chat = MagicMock()
     chat.id = 42

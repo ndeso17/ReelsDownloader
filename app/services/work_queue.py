@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.config import Settings
+from app.services.advance import Selection
 
 logger = logging.getLogger(__name__)
 
@@ -60,16 +61,21 @@ _DEFAULT_MAX_WAIT_SECONDS = Settings.model_fields["max_queue_wait_seconds"].defa
 
 @dataclass(frozen=True)
 class Job:
-    """Satu unit kerja: satu URL dari satu chat, siap dieksekusi worker."""
+    """Satu unit kerja: satu URL dari satu chat, siap dieksekusi worker.
+
+    `selection` (WP-19, FR-015..FR-018): `None` = jalur default v1.0 (SC 16);
+    selain itu opsi advance yang sudah divalidasi `app.services.advance`.
+    """
 
     chat_id: int
     user_id: int | None
     url: str
     enqueued_at: float
     context: Any = field(repr=False)
+    selection: Selection | None = None
 
 
-def build_job(update: Any, url: str, context: Any) -> Job:
+def build_job(update: Any, url: str, context: Any, selection: Selection | None = None) -> Job:
     """Susun `Job` dari `update` Telegram + URL yang sudah tervalidasi.
 
     `enqueued_at` memakai `time.monotonic()` (bukan jam dinding) supaya cek
@@ -85,6 +91,7 @@ def build_job(update: Any, url: str, context: Any) -> Job:
         url=url,
         enqueued_at=time.monotonic(),
         context=context,
+        selection=selection,
     )
 
 

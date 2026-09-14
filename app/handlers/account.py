@@ -1,8 +1,11 @@
-"""Handler akun & akses: `/getID` (FR-012), `/menu` (FR-016), `/setUser` (FR-014).
+"""Handler akun & akses + mode advance: `/getID` (FR-012), `/menu` (FR-016),
+`/setUser` (FR-014), `/advance` + dialog inline (FR-015..FR-019), `/cancel` (FR-019).
 
 `/getID` dan `/menu` PUBLIK di kedua mode (PRD §4). `/setUser` admin-only dan
 hanya aktif di private mode. Guard `/setUser` berurutan dan TIDAK bisa dilewati:
 tanpa guard, `/setUser` = penulisan daftar whitelist oleh siapa pun.
+`/advance` digate `can_download` (FR-015:479 - user tidak terdaftar ditolak
+FR-013; public mode tetap lolos semua).
 
 Semua mutasi file lewat `asyncio.to_thread` (AGENTS.md §4.4: I/O blocking).
 
@@ -22,6 +25,9 @@ import os
 
 from telegram.ext import ContextTypes
 
+from app.handlers.download import admit_advance_job
+from app.services import advance as advance_service
+from app.services import dialog as dialog_service
 from app.services import user_store
 from app.services.access import (
     MSG_ACCESS_DENIED,
@@ -33,13 +39,23 @@ from app.services.access import (
     MSG_SETUSER_NEED_PRIVATE_OWNER,
     MSG_SETUSER_REMOVED,
     MSG_SETUSER_USAGE,
+    can_download,
     is_owner,
     menu_text,
 )
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["get_id", "menu", "set_user", "stats", "write_lock_for"]
+__all__ = [
+    "advance_callback",
+    "advance_command",
+    "cancel_command",
+    "get_id",
+    "menu",
+    "set_user",
+    "stats",
+    "write_lock_for",
+]
 
 #: T-165 (FR-020, SC 18): pemisah rincian alasan penolakan pada keluaran `/stats`.
 _STATS_REASON_SEPARATOR = ", "
@@ -229,3 +245,109 @@ async def set_user(update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply += "\nGagal menyimpan ke berkas; perubahan hilang saat bot restart."
 
     await update.effective_message.reply_text(reply)
+
+
+# ============================ MODE ADVANCE (FR-015..FR-019) ============================
+
+
+async def advance_command(update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """FR-015: `/advance` mengaktifkan mode advance per chat (in-memory).
+
+    Gate = `can_download` (FR-015:479 - public mode lolos semua, private mode
+    hanya user terdaftar). `/advance` kedua saat sesi aktif = toggle off
+    (FR-015:477). BALASAN HANYA teks - keyboard baru muncul setelah URL valid
+    masuk (FR-015:473 link-first, keputusan manusia 2026-09-14).
+    """
+    settings = context.bot_data["settings"]
+    if not can_download(_user_id_of(update), settings, context.bot_data.get("users", {})):
+        await update.effective_message.reply_text(MSG_ACCESS_DENIED)
+        return
+    dialog = context.bot_data.get("dialog")
+    if dialog is None:
+        # Defensif: startup tidak memasang dialog (mis. test lama) => skip diam-diam.
+        return
+    chat_id = update.effective_chat.id
+    if dialog.active(chat_id):
+        dialog.clear(chat_id)
+        await update.effective_message.reply_text(dialog_service.MODE_OFF_TEXT)
+        return
+    dialog.set(chat_id, step=dialog_service.STEP_LINK)
+    await update.effective_message.reply_text(dialog_service.MODE_TEXT)
+
+
+async def cancel_command(update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """FR-019: `/cancel` membatalkan mode/dialog aktif + hapus state."""
+    dialog = context.bot_data.get("dialog")
+    if dialog is not None:
+        dialog.clear(update.effective_chat.id)
+    await update.effective_message.reply_text(dialog_service.CANCEL_MENU)
+
+
+async def advance_callback(update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """FR-015..FR-019: router `ad:*` - `answer()` tepat sekali di SEMUA cabang
+    (PRD §3: tidak boleh ada "Updating…" menggantung).
+
+    Cabang (PLAN T-192): `ad:cancel` => clear + balas menu; sesi mati => toast
+    `Sesi sudah berakhir` (+ `MSG_EXPIRED` bila tadinya ada tapi kedaluwarsa,
+    PRD.md:542); `ad:mode:*` (step type) => simpan tipe + prompt kualitas;
+    `ad:q:*`/`ad:a:*` (step quality, tipe cocok) => final: clear (satu sesi =
+    satu link), recap, `url` dari state diantrekan ke worker WP-17; keyboard
+    basi (step/tipe tidak cocok) => toast tanpa efek (FR-016).
+    """
+    query = update.callback_query
+    dialog = context.bot_data.get("dialog")
+    chat_id = update.effective_chat.id
+    parsed = dialog_service.parse_callback(query.data or "")
+    if parsed is None:
+        # Format/data callback tidak dikenal: tidak sah (FR-016) -> toast basi.
+        await query.answer(dialog_service.ANSWER_STALE)
+        return
+    kind, value = parsed
+    if kind == "cancel":
+        await query.answer()
+        if dialog is not None:
+            dialog.clear(chat_id)
+        await query.edit_message_reply_markup(reply_markup=None)
+        await context.bot.send_message(chat_id=chat_id, text=dialog_service.CANCEL_MENU)
+        return
+    expired = dialog is not None and dialog.is_expired(chat_id)
+    state = dialog.get(chat_id) if dialog is not None else None
+    if kind is None or state is None:
+        await query.answer(dialog_service.ANSWER_STALE)
+        if expired:
+            await context.bot.send_message(chat_id=chat_id, text=dialog_service.MSG_EXPIRED)
+        return
+    if kind == "mode" and state.step == dialog_service.STEP_TYPE:
+        dialog.set(chat_id, tipe=value, step=dialog_service.STEP_QUALITY)
+        await query.answer()
+        await query.edit_message_text(
+            text=dialog_service.PROMPT_QUALITY,
+            reply_markup=dialog_service.choice_keyboard(dialog_service.STEP_QUALITY, tipe=value),
+        )
+        return
+    if state.step == dialog_service.STEP_QUALITY and kind in ("q", "a"):
+        wanted = "video" if kind == "q" else "audio"
+        if state.tipe != wanted or state.url is None:
+            await query.answer(dialog_service.ANSWER_STALE)
+            return
+        updated = dialog.set(chat_id, kualitas=value)
+        selection = advance_service.resolve_selection(updated)
+        if selection is None:  # pragma: no cover - dijaga parse whitelist
+            await query.answer(dialog_service.ANSWER_STALE)
+            dialog.clear(chat_id)
+            return
+        dialog.clear(chat_id)  # sekali-pakai; mode auto-off (FR-015:478)
+        await query.answer()
+        label = (
+            f"Video · {'Best' if value == 'best' else f'{value}p'}"
+            if wanted == "video"
+            else f"Audio · mp3 {value}k"
+        )
+        try:
+            await query.edit_message_text(text=f"✅ Diproses: {label}")
+        except Exception:
+            # Pesan sumber sudah basi/dihapus client: recap bukan jalur kritis.
+            logger.debug("recap edit_message_text gagal (chat %s)", chat_id, exc_info=True)
+        await admit_advance_job(update, context, state.url, selection)
+        return
+    await query.answer(dialog_service.ANSWER_STALE)

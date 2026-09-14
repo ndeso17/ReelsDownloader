@@ -20,6 +20,7 @@ from yt_dlp.utils import DownloadError, ExtractorError, YoutubeDLError
 
 from app.config import Settings
 from app.services import downloader as downloader_mod
+from app.services.advance import Selection
 from app.services.downloader import (
     DOWNLOAD_TIMEOUT_SECONDS,
     METADATA_FIELDS,
@@ -388,3 +389,80 @@ async def test_timeout_error_is_not_reclassified(mock_ydl: type, settings: Setti
 
     assert not isinstance(exc_info.value, DownloadFailedError)
     hang.set()
+
+
+# ---------------- WP-19: selection-aware opts (T-194, T-197) ----------------
+
+
+def test_build_ydl_opts_none_selection_identik_default(tmp_downloads: str):
+    """SC 16: `selection=None` menghasilkan dict persis sama dengan jalur lama."""
+    assert build_ydl_opts(tmp_downloads, MAX_50MB, None) == build_ydl_opts(tmp_downloads, MAX_50MB)
+
+
+def test_build_ydl_opts_video_selection_height(tmp_downloads: str):
+    sel = Selection(mode="video", quality="480")
+    opts = build_ydl_opts(tmp_downloads, MAX_50MB, sel)
+    assert opts["format"] == "bestvideo[height<=480]+bestaudio/best[height<=480]"
+    assert opts["merge_output_format"] == "mp4"
+    assert opts["max_filesize"] == MAX_50MB
+
+
+def test_build_ydl_opts_video_selection_best_identik(tmp_downloads: str):
+    sel = Selection(mode="video", quality="best")
+    assert build_ydl_opts(tmp_downloads, MAX_50MB, sel)["format"] == "bestvideo+bestaudio/best"
+
+
+def test_build_ydl_opts_audio_selection(tmp_downloads: str):
+    sel = Selection(mode="audio", bitrate="320")
+    opts = build_ydl_opts(tmp_downloads, MAX_50MB, sel)
+    assert opts["format"] == "bestaudio/best"
+    assert opts["max_filesize"] is None
+    assert "merge_output_format" not in opts
+    pp = opts["postprocessors"][0]
+    assert pp["key"] == "FFmpegExtractAudio"
+    assert pp["preferredcodec"] == "mp3"
+    assert pp["preferredquality"] == "320"
+
+
+def test_download_result_new_fields_default_none_false(tmp_path: Path):
+    r = DownloadResult(path=tmp_path / "x.mp4", metadata={})
+    assert r.actual_height is None
+    assert r.actual_quality is None
+    assert r.is_audio is False
+
+
+async def test_download_audio_precheck_metadata_lewati_happy(
+    mock_ydl: type, settings: Settings, tmp_downloads: str
+):
+    """Audio: filesize video 500MB di metadata TIDAK memblokir; mp3 nyata kecil lolos."""
+    mock_ydl.info = {**FULL_INFO, "ext": "m4a", "filesize": 500 * 1024 * 1024}
+    _make_output(tmp_downloads, "ABC123.mp3")
+    result = await download(FAKE_URL, settings, Selection(mode="audio", bitrate="320"))
+    assert result.is_audio is True
+    assert result.path.name == "ABC123.mp3"
+
+
+async def test_download_audio_post_check_size_51mb(mock_ydl: type, tmp_downloads: str):
+    settings = Settings.model_construct(
+        telegram_bot_token=" ".join(["dummy", "token"]),
+        log_level="INFO",
+        download_dir=tmp_downloads,
+        max_file_size_mb=1,
+        max_concurrent_downloads=2,
+        rate_limit_seconds=10,
+    )
+    mock_ydl.info = {**FULL_INFO, "ext": "m4a"}
+    (Path(tmp_downloads) / "ABC123.mp3").write_bytes(b"x" * (2 * 1024 * 1024))
+    with pytest.raises(FileTooLargeError):
+        await download(FAKE_URL, settings, Selection(mode="audio", bitrate="320"))
+
+
+async def test_download_video_selection_isi_actual_height(
+    mock_ydl: type, settings: Settings, tmp_downloads: str
+):
+    mock_ydl.info = {**FULL_INFO, "height": 480}
+    _make_output(tmp_downloads)
+    result = await download(FAKE_URL, settings, Selection(mode="video", quality="720"))
+    assert result.actual_height == 480
+    assert result.actual_quality == "480p"
+    assert result.is_audio is False

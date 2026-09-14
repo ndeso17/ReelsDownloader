@@ -1,9 +1,14 @@
 """yt-dlp downloader service (FR-005, FR-006).
 
 Aturan yang mengikat modul ini (AGENTS.md):
-- §2: yt-dlp lewat **Python API**, FFmpeg dipanggil yt-dlp (merge), bukan subprocess.
-- §4.2: semua import top-level. §4.4: fungsi I/O `async def`, call blocking → `asyncio.to_thread`.
-- §5: `outtmpl` tidak pernah memuat input user; nama file dihasilkan yt-dlp dari `%(id)s`.
+- §2: yt-dlp lewat **Python API**, FFmpeg dipanggil yt-dlp (merge/postprocessor),
+  bukan subprocess.
+- §4.2: semua import top-level. §4.4: fungsi I/O `async def`, call blocking →
+  `asyncio.to_thread`.
+- §5: `outtmpl` tidak pernah memuat input user; nama file dihasilkan yt-dlp
+  dari `%(id)s`.
+- WP-19: audio-only diekstrak lewat `FFmpegExtractAudio` postprocessor,
+  ukuran dicek SETELAH ekstraksi ke `.mp3` (FR-018).
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from pathlib import Path
 import yt_dlp
 
 from app.config import Settings
+from app.services.advance import Selection, audio_opts, video_format
 from app.services.errors import (
     DownloadFailedError,
     FileTooLargeError,
@@ -40,6 +46,9 @@ class DownloadResult:
 
     path: Path
     metadata: dict
+    actual_height: int | None = None
+    actual_quality: str | None = None
+    is_audio: bool = False
 
 
 def extract_metadata(info: dict) -> dict:
@@ -47,16 +56,22 @@ def extract_metadata(info: dict) -> dict:
     return {field: info.get(field) for field in METADATA_FIELDS}
 
 
-def build_ydl_opts(download_dir: str, max_bytes: int) -> dict:
+def build_ydl_opts(
+    download_dir: str,
+    max_bytes: int,
+    selection: Selection | None = None,
+) -> dict:
     """Opts yt-dlp: format, merge mp4, outtmpl terkendali kode, timeout eksplisit.
 
-    `max_bytes` dipasang ganda: pre-check manual di `_run_download` (T-044) dan
-    `max_filesize` yt-dlp sebagai lantai kedua (T-042/T-044, FR-009).
+    `selection=None` => byte-identik mode default (SC 16).
+    `max_bytes` dipasang ganda: pre-check manual di `_run_download` (T-044)
+    dan `max_filesize` yt-dlp sebagai lantai kedua (T-042/T-044, FR-009).
+    Untuk audio-only: `max_filesize` di-set `None` (FR-018: metadata pra-unduh
+    bukan ukuran mp3 hasil ekstraksi) dan cek ukuran dilakukan pasca-ekstraksi.
     """
     opts: dict = {
         "format": "bestvideo+bestaudio/best",
         "merge_output_format": "mp4",
-        # Nama file dihasilkan yt-dlp dari id: bukan input user (AGENTS.md §5).
         "outtmpl": os.path.join(download_dir, "%(id).10s.%(ext)s"),
         "noplaylist": True,
         "quiet": True,
@@ -67,6 +82,16 @@ def build_ydl_opts(download_dir: str, max_bytes: int) -> dict:
         "restrict_fallback": False,
         "max_filesize": max_bytes,
     }
+    if selection is None:
+        return opts
+    if selection.mode == "audio":
+        opts.update(audio_opts(selection.bitrate or "320"))
+        opts.pop("merge_output_format", None)
+        opts["max_filesize"] = None
+        return opts
+    if selection.mode == "video":
+        opts["format"] = video_format(selection.quality)
+        return opts
     return opts
 
 
@@ -93,46 +118,72 @@ def _classify_yt_dlp_error(exc: yt_dlp.utils.YoutubeDLError) -> Exception:
     return DownloadFailedError(message)
 
 
-def _run_download(url: str, opts: dict) -> DownloadResult:
+def _run_download(
+    url: str,
+    opts: dict,
+    selection: Selection | None = None,
+    max_bytes: int | None = None,
+) -> DownloadResult:
     """Bagian blocking (Python API yt-dlp), hanya dipanggil via asyncio.to_thread."""
+    is_audio = selection is not None and selection.mode == "audio"
     with yt_dlp.YoutubeDL(opts) as ydl:
-        # T-044: pre-check ukuran SEBELUM bit apa pun diunduh.
         info = ydl.extract_info(url, download=False)
         if info is None:
             raise VideoNotFoundError(f"Ekstraksi metadata gagal untuk: {url}")
 
         filesize = info.get("filesize") or info.get("filesize_approx")
-        max_bytes = opts["max_filesize"]
-        if filesize is not None and filesize > max_bytes:
-            raise FileTooLargeError(f"Ukuran video {filesize} byte melebihi batas {max_bytes} byte")
+        limit = opts.get("max_filesize")
+        if limit is not None and filesize is not None and filesize > limit:
+            raise FileTooLargeError(f"Ukuran video {filesize} byte melebihi batas {limit} byte")
 
         downloaded = ydl.extract_info(url, download=True)
         if downloaded is None:
             raise DownloadFailedError(f"Download tidak menghasilkan info untuk: {url}")
 
         path = Path(ydl.prepare_filename(downloaded))
+        if is_audio:
+            # FFmpegExtractAudio mengganti kontainer ke .mp3 setelah ekstraksi.
+            alt = path.with_suffix(".mp3")
+            if not path.exists() and alt.exists():
+                path = alt
         if not path.exists():
             raise DownloadFailedError(f"File hasil download tidak ditemukan: {path}")
 
-        return DownloadResult(path=path, metadata=extract_metadata(downloaded))
+        if is_audio:
+            size = path.stat().st_size
+            if max_bytes is not None and size > max_bytes:
+                raise FileTooLargeError(f"Ukuran audio {size} byte melebihi batas {max_bytes} byte")
+
+        height = downloaded.get("height")
+        return DownloadResult(
+            path=path,
+            metadata=extract_metadata(downloaded),
+            actual_height=int(height) if isinstance(height, int) else None,
+            actual_quality=f"{height}p" if isinstance(height, int) else None,
+            is_audio=is_audio,
+        )
 
 
-async def download(url: str, settings: Settings) -> DownloadResult:
-    """Download satu URL IG/FB public, kembalikan path + metadata (FR-005, FR-006).
+async def download(
+    url: str,
+    settings: Settings,
+    selection: Selection | None = None,
+) -> DownloadResult:
+    """Download satu URL IG/FB/TikTok public, kembalikan path + metadata.
 
-    Naik: `FileTooLargeError` (pre-check), `PrivateVideoError`,
-    `VideoNotFoundError`, `DownloadFailedError`, atau `asyncio.TimeoutError`
-    (hard-cap; dipetakan WP-10 ke pesan 'Timeout').
+    Naik: `FileTooLargeError` (pre-check atau pasca-ekstraksi audio),
+    `PrivateVideoError`, `VideoNotFoundError`, `DownloadFailedError`, atau
+    `asyncio.TimeoutError` (hard-cap; dipetakan WP-10 ke pesan 'Timeout').
     """
-    opts = build_ydl_opts(settings.download_dir, settings.max_file_size_mb * 1024 * 1024)
+    max_bytes = settings.max_file_size_mb * 1024 * 1024
+    opts = build_ydl_opts(settings.download_dir, max_bytes, selection)
 
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(_run_download, url, opts),
+            asyncio.to_thread(_run_download, url, opts, selection, max_bytes),
             timeout=DOWNLOAD_TIMEOUT_SECONDS,
         )
     except TimeoutError:
-        # asyncio.TimeoutError adalah alias TimeoutError di 3.12: jangan diklasifikasi.
         logger.warning("Download job timeout >%ss: %s", DOWNLOAD_TIMEOUT_SECONDS, url)
         raise
     except yt_dlp.utils.YoutubeDLError as exc:

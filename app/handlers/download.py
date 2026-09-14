@@ -30,11 +30,13 @@ from typing import Any
 
 from telegram.ext import ContextTypes
 
+from app.services import dialog as dialog_service
 from app.services import downloader as downloader_service
 from app.services.access import MSG_ACCESS_DENIED, can_download
+from app.services.advance import Selection, quality_note
 from app.services.errors import RateLimitedError, UploadError, user_message
 from app.services.stats import Stats
-from app.services.uploader import send_video
+from app.services.uploader import send_audio, send_video
 from app.services.validator import UnsupportedUrlError, extract_url, validate_url
 from app.services.work_queue import (
     MSG_QUEUE_FULL,
@@ -157,14 +159,57 @@ def _counter_change(bot_data: dict, delta: int) -> None:
         counter[0] = max(0, counter[0] + delta)
 
 
+async def admit_advance_job(
+    update,
+    context: ContextTypes.DEFAULT_TYPE,
+    url: str,
+    selection: Selection | None = None,
+) -> bool:
+    """FR-015..FR-017: admission dari jalur dialog advance (bukan handler URL).
+
+    Antrean/worker/counter sama dengan jalur reguler; balas lewat chat
+    karena callback TIDAK punya `update.message.reply_text` yang valid.
+    Return True bila job diterima; False bila antrean penuh.
+    """
+    bot_data = context.bot_data
+    settings = bot_data["settings"]
+    queue = _get_default_queue(bot_data, settings)
+    _ensure_workers(bot_data, settings)
+    counter = _task_counter_of(bot_data)
+    if counter is not None:
+        counter[0] += 1
+    try:
+        queue.put_nowait(build_job(update, url, context, selection))
+    except asyncio.QueueFull:
+        if counter is not None:
+            counter[0] = max(0, counter[0] - 1)
+        _stats_reject(bot_data, "queue_full")
+        logger.info(
+            "antrean penuh (chat %s, maxsize %s): permintaan advance ditolak",
+            update.effective_chat.id,
+            queue.maxsize,
+        )
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=MSG_QUEUE_FULL)
+        return False
+    chat_id = update.effective_chat.id
+    if queue.qsize() > 1:
+        await context.bot.send_message(
+            chat_id=chat_id, text=f"{ACK_TEXT} (antrean: {queue.qsize()})"
+        )
+    else:
+        await context.bot.send_message(chat_id=chat_id, text=ACK_TEXT)
+    return True
+
+
 async def _upload_after_download(
     context: ContextTypes.DEFAULT_TYPE,
     url: str,
     result,
     chat_id: int,
     settings,
+    selection: Selection | None = None,
 ) -> bool:
-    """T-087: setelah download sukses, kirim video ke Telegram.
+    """T-087: setelah download sukses, kirim video/audio ke Telegram.
 
     T-164 (FR-021): kini mengembalikan `bool` (sukses/kegagalan upload) supaya
     `run_job` bisa memisahkan "diproses" dari "gagal total". Teks balasan, urutan
@@ -178,19 +223,32 @@ async def _upload_after_download(
      (`tests/test_cleanup.py::test_cleanup_after_failed_upload`,
      `tests/test_uploader.py::test_handler_replies_error_message_when_upload_fails`)
     , tetap identik maknanya dengan `MSG_UPLOAD_FAILED` dari T-101.
+
+    WP-19: `result.is_audio` => `send_audio` (FR-018); `selection` video dengan
+    hasil lebih rendah dari permintaan => `note` caption `(720p→480p)` (FR-017).
+    Tanpa keduanya, panggilan `send_video` tetap kwarg-identik jalur lama.
     """
     safe_metadata = sanitize_metadata(result.metadata or {})
     safe_title = sanitize_filename(str(safe_metadata.get("title") or ""))
+    kwargs = {
+        "chat_id": chat_id,
+        "file_path": result.path,
+        "title": safe_title,
+        "url": url,
+        "max_file_size_mb": settings.max_file_size_mb,
+    }
+    if result.is_audio:
+        sender = send_audio
+    else:
+        sender = send_video
+        kwargs["metadata"] = safe_metadata
+        note = None
+        if selection is not None and selection.mode == "video":
+            note = quality_note(selection.quality, result.actual_height)
+        if note:
+            kwargs["note"] = note
     try:
-        await send_video(
-            bot=context.bot,
-            chat_id=chat_id,
-            file_path=result.path,
-            title=safe_title,
-            url=url,
-            max_file_size_mb=settings.max_file_size_mb,
-            metadata=safe_metadata,
-        )
+        await sender(bot=context.bot, **kwargs)
     except UploadError as exc:
         logger.warning("upload gagal untuk %s: %s", url, exc)
         await context.bot.send_message(chat_id=chat_id, text="⚠️ Gagal mengirim video ke Telegram.")
@@ -253,8 +311,15 @@ async def run_job(
     try:
         async with semaphore:
             try:
-                result = await downloader_service.download(url, settings)
-                uploaded = await _upload_after_download(context, url, result, chat_id, settings)
+                # T-195/SC 16: default => panggilan posisional lama Persis;
+                # hanya job advance yang menambah argumen ketiga.
+                if job.selection is None:
+                    result = await downloader_service.download(url, settings)
+                else:
+                    result = await downloader_service.download(url, settings, job.selection)
+                uploaded = await _upload_after_download(
+                    context, url, result, chat_id, settings, job.selection
+                )
                 # T-164 (FR-021): hanya upload yang benar-benar tersampaikan yang
                 # dihitung "diproses"; kegagalan download maupun upload masuk
                 # `download_failed`. Tidak ada perubahan aliran/teks di atas.
@@ -329,6 +394,23 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
         _stats_reject(bot_data, "rate_limited")
         await update.message.reply_text(str(exc))
         return
+
+    # ---- FR-015/FR-016: jalur dialog advance (link-first) ----
+    # Pra-syarat: mode advance aktif untuk chat ini dan menunggu URL.
+    # -> simpan URL, prompt tipe Video/Audio, RETURN tanpa antre.
+    # State mati/None => fallback ke antrean reguler (SC 16).
+    dialog = bot_data.get("dialog")
+    if dialog is not None:
+        state = dialog.get(chat_id)
+        if state is not None:
+            # Link baru = sesi baru: pilihan tipe/kualitas lama dibuang
+            # (FR-016 "satu sesi dialog = satu link").
+            dialog.set(chat_id, url=url, step=dialog_service.STEP_TYPE, tipe=None, kualitas=None)
+            await update.message.reply_text(
+                dialog_service.PROMPT_TYPE,
+                reply_markup=dialog_service.choice_keyboard(dialog_service.STEP_TYPE),
+            )
+            return
 
     # ---- T-172 (FR-022): admission control SEBELUM ada pekerjaan apa pun ----
     # Tidak ada lagi spawn task per request (pola lama `_job` di-launch inline): yang dijadwalkan

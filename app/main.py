@@ -10,13 +10,27 @@ import asyncio
 import inspect
 import logging
 
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
 
 from app.config import get_settings
-from app.handlers.account import get_id, menu, set_user
+from app.handlers.account import (
+    advance_callback,
+    advance_command,
+    cancel_command,
+    get_id,
+    menu,
+    set_user,
+)
 from app.handlers.account import stats as stats_command
 from app.handlers.download import download_handler
 from app.handlers.start import help_command, start
+from app.services.dialog import DialogState
 from app.services.rate_limiter import UserRateLimiter
 from app.services.stats import Stats
 from app.services.user_store import load_users
@@ -86,6 +100,10 @@ async def main() -> None:
     # env; production value = settings.max_concurrent_downloads.
     application.bot_data["semaphore"] = asyncio.Semaphore(settings.max_concurrent_downloads)
     application.bot_data["settings"] = settings
+    # WP-19 (FR-015..FR-019): state dialog mode advance per chat, in-memory
+    # dengan TTL 120 dtk; TIDAK dibuat di module-level agar tiap event-loop
+    # punya instance sendiri (pola semaphore T-111).
+    application.bot_data["dialog"] = DialogState()
 
     # WP-17 (FR-022): antrean kerja in-process + admission control anti-OOM.
     # `maxsize` membatasi jumlah job tertunda; handler menolak dengan pesan
@@ -111,6 +129,11 @@ async def main() -> None:
     application.add_handler(CommandHandler("getID", get_id))
     application.add_handler(CommandHandler("menu", menu))
     application.add_handler(CommandHandler("setUser", set_user))
+
+    # WP-19 (FR-015..FR-019): handler mode advance + dialog inline + `/cancel`.
+    application.add_handler(CommandHandler("advance", advance_command))
+    application.add_handler(CommandHandler("cancel", cancel_command))
+    application.add_handler(CallbackQueryHandler(advance_callback, pattern=r"^ad:"))
 
     # T-166 (FR-020): handler `/stats` admin. `menu`/`help` tetap tidak menyebut
     # `/stats` di teksnya agar konsisten (teks tertanam di `app/handlers/start.py`,
