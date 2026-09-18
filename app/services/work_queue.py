@@ -65,6 +65,14 @@ class Job:
 
     `selection` (WP-19, FR-015..FR-018): `None` = jalur default v1.0 (SC 16);
     selain itu opsi advance yang sudah divalidasi `app.services.advance`.
+
+    `ack_message_id` + `token` (WP-21, T-214): identitas pesan ack
+    `⏳ Sedang memproses...` milik job ini, supaya `run_job` bisa menghapusnya
+    di `finally` (FR-007) dan tombol `❌ Batalkan` (`ac:<token>`) bisa
+    memetakan callback KEMBALI ke job-nya. Dua field baru punya default
+    (`None`), jadi 40+ konstruksi `Job(...)` lama yang memakai keyword tetap
+    sah; `frozen=True` melarang mutasi, jadi perubahan status cancel memakai
+    dict mutable di `bot_data` (`ack_cancel_requested`), bukan setattr.
     """
 
     chat_id: int
@@ -73,6 +81,8 @@ class Job:
     enqueued_at: float
     context: Any = field(repr=False)
     selection: Selection | None = None
+    ack_message_id: int | None = None
+    token: str | None = None
 
 
 def build_job(update: Any, url: str, context: Any, selection: Selection | None = None) -> Job:
@@ -80,6 +90,12 @@ def build_job(update: Any, url: str, context: Any, selection: Selection | None =
 
     `enqueued_at` memakai `time.monotonic()` (bukan jam dinding) supaya cek
     kedaluwarsa tahan terhadap lompatan/NTP koreksi jam sistem.
+
+    WP-21 (T-214): identitas ack (`ack_message_id`, `token`) TIDAK menjadi
+    argumen di sini - `Job` `frozen=True` dan signature lama dikunci banyak
+    spy test, jadi jalur handler melengkapinya lewat `dataclasses.replace`
+    SETELAH ack terkirim. Field tetap punya default sehingga 40+ konstruksi
+    `Job(...)` lama tidak berubah.
     """
     effective_chat = getattr(update, "effective_chat", None)
     chat_id = getattr(effective_chat, "id", 0)

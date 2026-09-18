@@ -28,7 +28,7 @@ from app.handlers.account import (
     set_user,
 )
 from app.handlers.account import stats as stats_command
-from app.handlers.download import download_handler
+from app.handlers.download import cancel_ack_callback, download_handler
 from app.handlers.start import help_command, start
 from app.services.dialog import DialogState
 from app.services.rate_limiter import UserRateLimiter
@@ -134,6 +134,10 @@ async def main() -> None:
     application.add_handler(CommandHandler("advance", advance_command))
     application.add_handler(CommandHandler("cancel", cancel_command))
     application.add_handler(CallbackQueryHandler(advance_callback, pattern=r"^ad:"))
+    # WP-21 (T-213, FR-022): tombol `❌ Batalkan` pada pesan ack antrean.
+    # Prefix `ac:` SENGAJA beda dari `ad:` WP-19 supaya kedua
+    # CallbackQueryHandler tidak saling menelan (masing-masing pattern spesifik).
+    application.add_handler(CallbackQueryHandler(cancel_ack_callback, pattern=r"^ac:"))
 
     # T-166 (FR-020): handler `/stats` admin. `menu`/`help` tetap tidak menyebut
     # `/stats` di teksnya agar konsisten (teks tertanam di `app/handlers/start.py`,

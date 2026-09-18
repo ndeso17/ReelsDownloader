@@ -29,6 +29,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import SecretStr
 from telegram.error import RetryAfter, TelegramError
+from telegram.ext import CallbackQueryHandler
 
 from app.config import Settings
 from app.handlers import account as account_mod
@@ -949,6 +950,30 @@ async def test_main_wires_stats_and_post_shutdown(tmp_path, monkeypatch):
         if "stats" in getattr(call.args[0], "commands", ())
     )
     assert stats_handler.callback is main_mod.stats_command
+
+    # WP-21 (T-217): handler callback baru (`ac:` tombol Batalkan) menambah
+    # jumlah registrasi. Jumlahnya dibuat EKSPLISIT (bukan loosened) supaya
+    # handler yang hilang/tertukar tetap ketahuan.
+    from app.handlers.download import cancel_ack_callback
+
+    callback_handlers = [
+        call.args[0]
+        for call in application.add_handler.call_args_list
+        if isinstance(call.args[0], CallbackQueryHandler)
+    ]
+    assert len(callback_handlers) == 2, "ad: (WP-19) + ac: (WP-21)"
+    assert main_mod.CallbackQueryHandler is CallbackQueryHandler
+    ack_handlers = [
+        h for h in callback_handlers if getattr(h, "callback", None) is cancel_ack_callback
+    ]
+    assert len(ack_handlers) == 1, "handler `ac:` terdaftar tepat sekali"
+    advance_handlers = [
+        h for h in callback_handlers if getattr(h, "callback", None) is main_mod.advance_callback
+    ]
+    assert len(advance_handlers) == 1, "handler `ad:` WP-19 tidak tertelan"
+    # Pattern wajib beda supaya callback tidak saling menelan (T-213).
+    assert ack_handlers[0].pattern.pattern == r"^ac:"
+    assert advance_handlers[0].pattern.pattern == r"^ad:"
 
 
 async def test_main_restores_known_users_from_disk(tmp_path, monkeypatch):

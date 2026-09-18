@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
 import time
 from typing import Any
@@ -23,6 +24,10 @@ from app.services.work_queue import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: Penanda ack WP-21 (BUKAN kredensial): nilai dummy supaya linter tidak
+#: mengira literal ini password.
+DUMMY_ACK_TOKEN = "t-42"  # noqa: S105 - nilai dummy, bukan kredensial
 
 
 @pytest.fixture
@@ -823,3 +828,47 @@ async def test_worker_continues_after_exception():
     stop_event.set()
     await asyncio.wait_for(worker, timeout=1.0)
     assert results == ["good"]
+
+
+# WP-21 T-214: field baru Job + invariant frozen.
+
+
+def test_job_new_fields_default_and_keyword_only():
+    """40+ konstruksi lama masih berfungsi tanpa kwargs (T-214, SC 16)."""
+    from dataclasses import fields as dc_fields
+
+    job = Job(chat_id=1, user_id=None, url="u", enqueued_at=0.0, context=None)
+    assert job.ack_message_id is None
+    assert job.token is None
+    field_names = {f.name for f in dc_fields(job)}
+    assert field_names == {
+        "chat_id",
+        "user_id",
+        "url",
+        "enqueued_at",
+        "context",
+        "selection",
+        "ack_message_id",
+        "token",
+    }
+
+
+def test_job_frozen_mutation_raises():
+    """Mutasi atribut Job dilarang (T-214)."""
+    job = Job(
+        chat_id=1, user_id=None, url="u", enqueued_at=0.0, context=None, token=DUMMY_ACK_TOKEN
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        job.token = DUMMY_ACK_TOKEN
+
+
+def test_job_token_replace_with_dataclasses_replace():
+    """`replace(...)` meniru Job baru untuk token, tanpa setattr."""
+    from dataclasses import replace
+
+    job = Job(chat_id=1, user_id=None, url="u", enqueued_at=0.0, context=None)
+    cloned = replace(job, token=DUMMY_ACK_TOKEN, ack_message_id=99)
+    assert cloned.token == DUMMY_ACK_TOKEN
+    assert cloned.ack_message_id == 99
+    assert cloned.url == "u"
+    assert job.token is None, "asal tidak berubah"

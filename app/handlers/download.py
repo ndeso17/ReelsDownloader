@@ -25,9 +25,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from app.services import dialog as dialog_service
@@ -59,6 +61,27 @@ WORKERS_KEY = "workers"
 STOP_EVENT_KEY = "stop_event"
 TASK_COUNTER_KEY = "task_counter"
 JOB_RUNTIME_KEY = "job_runtime"
+
+#: WP-21 (T-211): registry pesan ack per chat. `ack_messages[chat_id]` =
+#: `message_id` pesan `ACK_TEXT` yang masih hidup; `ack_tokens[token]` =
+#: `(chat_id, message_id, url)` untuk memetakan callback `ac:<token>` kembali
+#: ke job. `ack_cancel_requested` = himpunan `token` yang tombol Batalkan-nya
+#: sudah ditekan (payload mau dilewati di titik aman, lihat `run_job`).
+ACK_MESSAGES_KEY = "ack_messages"
+ACK_TOKENS_KEY = "ack_tokens"
+ACK_CANCEL_KEY = "ack_cancel_requested"
+
+#: WP-21 (T-213): prefix callback tombol Batalkan. WAJIB beda dari `ad:` WP-19
+#: (`app/services/dialog.py`) supaya dua `CallbackQueryHandler` tidak saling
+#: menelan: pattern `^ac:` hanya cocok untuk tombol batalkan antrean.
+ACK_CALLBACK_PREFIX = "ac:"
+
+#: Teks tombol + jawaban callback (PRD §3: tidak ada "Updating…" menggantung).
+ACK_CANCEL_LABEL = "❌ Batalkan"
+MSG_ACK_CANCEL_QUEUED = "🗑️ Dibatalkan sebelum diproses."
+MSG_ACK_CANCEL_RUNNING = "⏹️ Permintaan dicatat; job dilewati di titik aman berikutnya."
+MSG_ACK_CANCEL_DONE = "✅ Permintaan ini sudah selesai diproses."
+ACK_CANCELLED_SUFFIX = " (dibatalkan)"
 
 _START_TEXT = (
     "👋 Instagram/Facebook/TikTok Downloader\n"
@@ -138,7 +161,14 @@ def _ensure_workers(bot_data: dict, settings: Any) -> list[asyncio.Task]:
 
 
 async def _notify_chat(job: Job, text: str) -> None:
-    """Saluran `notify` worker: kirim pesan antrean (kedaluwarsa) ke chat user."""
+    """Saluran `notify` worker: kirim pesan antrean (kedaluwarsa) ke chat user.
+
+    WP-21 (T-216e): job kedaluwarsa TIDAK melewati `run_job`, jadi ack-nya
+    harus dihapus DI SINI juga - kalau tidak, pesan `⏳ Sedang memproses...`
+    menggantung berdampingan dengan `MSG_QUEUE_EXPIRED` (temuan asal WP).
+    """
+    await _delete_ack(job.context.bot, job.context.bot_data, job.chat_id, job.token)
+    _drop_ack_token(job.context.bot_data, job.token)
     await job.context.bot.send_message(chat_id=job.chat_id, text=text)
 
 
@@ -159,6 +189,242 @@ def _counter_change(bot_data: dict, delta: int) -> None:
         counter[0] = max(0, counter[0] + delta)
 
 
+# ------------------------------- WP-21: registry pesan ack (T-211) ----------
+
+
+def register_ack(bot_data: dict, chat_id: int, message_id: int | None) -> None:
+    """Catat `message_id` pesan ack terbaru untuk `chat_id` (T-211, FR-007).
+
+    Ack adalah SATU-satunya pesan "sedang memproses" per chat: mencatat ack
+    baru untuk chat yang sama berarti ack lama di-REPLACE di registry (bukan
+    dihapus paksa) sehingga tidak ada dua pesan hidup bersamaan. `None`
+    (mis. `reply_text` tiruan tanpa `message_id`) hanya membersihkan entri.
+    """
+    messages = bot_data.get(ACK_MESSAGES_KEY)
+    if not isinstance(messages, dict):
+        messages = {}
+        bot_data[ACK_MESSAGES_KEY] = messages
+    if message_id is None:
+        messages.pop(chat_id, None)
+        return
+    messages[chat_id] = message_id
+
+
+def pop_ack(bot_data: dict, chat_id: int) -> int | None:
+    """Ambil-lalu-hapus `message_id` ack milik `chat_id` (T-211, FR-007).
+
+    Idempoten: pemanggilan kedua mengembalikan `None`, jadi dua jalur yang
+    sama-sama berhak menghapus (job `finally` + tombol Batalkan) tidak pernah
+    menghapus pesan yang sama dua kali.
+    """
+    messages = bot_data.get(ACK_MESSAGES_KEY)
+    if not isinstance(messages, dict):
+        return None
+    message_id = messages.pop(chat_id, None)
+    return message_id if isinstance(message_id, int) else None
+
+
+def register_ack_token(bot_data: dict, token: str, chat_id: int, message_id: int | None) -> None:
+    """Petakan `token` tombol Batalkan -> `(chat_id, message_id)` (T-213)."""
+    tokens = bot_data.get(ACK_TOKENS_KEY)
+    if not isinstance(tokens, dict):
+        tokens = {}
+        bot_data[ACK_TOKENS_KEY] = tokens
+    tokens[token] = (chat_id, message_id)
+
+
+def _drop_ack_token(bot_data: dict, token: str | None) -> None:
+    """Buang pemetaan token (job selesai/dibatalkan); no-op bila tak ada."""
+    tokens = bot_data.get(ACK_TOKENS_KEY)
+    if isinstance(tokens, dict) and token is not None:
+        tokens.pop(token, None)
+
+
+def _ack_cancelled(bot_data: dict, token: str | None) -> bool:
+    """True bila tombol Batalkan untuk `token` sudah ditekan (T-213)."""
+    if token is None:
+        return False
+    requested = bot_data.get(ACK_CANCEL_KEY)
+    return isinstance(requested, set) and token in requested
+
+
+def _mark_ack_cancelled(bot_data: dict, token: str) -> None:
+    """Tandai `token` untuk dilewati di titik aman (T-213)."""
+    requested = bot_data.get(ACK_CANCEL_KEY)
+    if not isinstance(requested, set):
+        requested = set()
+        bot_data[ACK_CANCEL_KEY] = requested
+    requested.add(token)
+
+
+def ack_keyboard(token: str) -> InlineKeyboardMarkup:
+    """Keyboard satu tombol Batalkan dengan callback `ac:<token>` (T-213)."""
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton(ACK_CANCEL_LABEL, callback_data=f"{ACK_CALLBACK_PREFIX}{token}")]]
+    )
+
+
+async def _delete_ack(bot: Any, bot_data: dict, chat_id: int, token: str | None = None) -> None:
+    """Hapus pesan ack milik job ini bila masih tercatat (T-212, FR-007/FR-008).
+
+    Urutan pilih pesan: peta token (`ac:<token>` -> message_id) lebih dulu,
+    baru registry per-chat. Alasannya: kalau user mengirim link KEDUA saat job
+    pertama masih jalan, registry per-chat sudah menunjuk ack BARU (T-211:
+    satu ack hidup per chat, ack lama di-replace tanpa hapus paksa). Tanpa
+    jalur token, job pertama akan menghapus pesan ack milik job kedua.
+
+    Wajib tahan-banting: `BadRequest` (mis. `Message to delete not found`,
+    `Message can't be deleted`) atau error apa pun HANYA di-`logger.warning`
+    (AGENTS §5: traceback ke log, bukan ke user) - `run_job` tidak boleh
+    raise dan worker tidak boleh mati. Entri di-pop lebih dulu supaya pesan
+    yang sama tidak pernah dihapus dua kali oleh jalur lain.
+    """
+    message_id: int | None = None
+    tokens = bot_data.get(ACK_TOKENS_KEY)
+    if token is not None and isinstance(tokens, dict):
+        entry = tokens.pop(token, None)
+        if isinstance(entry, tuple) and len(entry) == 2 and isinstance(entry[1], int):
+            message_id = entry[1]
+    if message_id is None:
+        message_id = pop_ack(bot_data, chat_id)
+    else:
+        # Registry per-chat hanya dibersihkan bila masih menunjuk pesan yang
+        # sama; kalau sudah digantikan ack baru, jangan sentuh entri itu.
+        messages = bot_data.get(ACK_MESSAGES_KEY)
+        if isinstance(messages, dict) and messages.get(chat_id) == message_id:
+            messages.pop(chat_id, None)
+    if message_id is None:
+        return
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        logger.warning(
+            "hapus pesan ack gagal (chat %s, message %s)", chat_id, message_id, exc_info=True
+        )
+
+
+def _ack_markup(token: str | None) -> InlineKeyboardMarkup | None:
+    """Keyboard tombol Batalkan untuk ack (None bila token kosong)."""
+    return ack_keyboard(token) if token else None
+
+
+def _record_ack(bot_data: dict, chat_id: int, token: str | None, message: Any) -> int | None:
+    """Catat `message_id` ack `message` ke registry per-chat + peta token (T-211).
+
+    `message_id` bisa `None`/non-int pada mock tanpa `message_id`; saat itu
+    registry hanya tidak bertambah (tidak ada yang dihapus salah).
+    """
+    message_id = getattr(message, "message_id", None)
+    if not isinstance(message_id, int):
+        return None
+    register_ack(bot_data, chat_id, message_id)
+    if token:
+        register_ack_token(bot_data, token, chat_id, message_id)
+    return message_id
+
+
+def _new_ack_token(chat_id: int) -> str:
+    """Token unik per job: `chat_id` + penghitung proses (cukup in-process)."""
+    _ACK_TOKEN_SEQ[0] += 1
+    return f"{chat_id}-{_ACK_TOKEN_SEQ[0]}"
+
+
+#: Penghitung token ack proses-lokal (satu event-loop, pola `task_counter`).
+_ACK_TOKEN_SEQ = [0]
+
+
+async def cancel_ack_callback(update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """`ac:<token>` (T-213, FR-022): batalkan job yang menunggu / tandai yang jalan.
+
+    Selalu `answer()` tepat sekali di SETIAP cabang supaya tidak ada spinner
+    "Updating…" menggantung (pola WP-19). Job yang masih di antrean dikeluarkan
+    (`get_nowait` + `task_done` + counter) lalu ack-nya dihapus; job yang sudah
+    jalan hanya ditandai (`ack_cancel_requested`) dan dilewati di titik aman
+    setelah download selesai (tidak ada klaim "download dihentikan": `yt-dlp`
+    blocking di `asyncio.to_thread` memang tidak bisa di-interrupt). Tombol
+    yang ditekan setelah job selesai dijawab halus, bukan error.
+    """
+    query = update.callback_query
+    data = getattr(query, "data", "") or ""
+    token = data[len(ACK_CALLBACK_PREFIX) :] if data.startswith(ACK_CALLBACK_PREFIX) else ""
+    bot_data = context.bot_data
+    tokens = bot_data.get(ACK_TOKENS_KEY)
+    entry = tokens.get(token) if isinstance(tokens, dict) else None
+    if not token or entry is None:
+        # Basi / sudah selesai: jawab halus, jangan error (T-213).
+        await query.answer(MSG_ACK_CANCEL_DONE)
+        return
+
+    chat_id, message_id = entry
+    queue = bot_data.get(QUEUE_KEY)
+    removed_from_queue = False
+    if isinstance(queue, asyncio.Queue):
+        # `_extract_job_from_queue` menyeimbangkan `_unfinished_tasks` sendiri
+        # (lihat docstring), jadi tidak ada `task_done()` tambahan di sini.
+        if _extract_job_from_queue(queue, token) is not None:
+            removed_from_queue = True
+            # Slot kerja WP-17 dilepas: job ini tidak akan pernah melewati
+            # `finally` `run_job` (satu-satunya tempat penurunan lain).
+            _counter_change(bot_data, -1)
+    _drop_ack_token(bot_data, token)
+    if removed_from_queue:
+        text = MSG_ACK_CANCEL_QUEUED
+    else:
+        _mark_ack_cancelled(bot_data, token)
+        text = MSG_ACK_CANCEL_RUNNING
+    # Hapus pesan ack (job dipegang TIDAK bisa di-cancel bersih: lihat docstring).
+    if isinstance(message_id, int):
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            logger.warning(
+                "hapus ack lewat tombol gagal (chat %s, message %s)",
+                chat_id,
+                message_id,
+                exc_info=True,
+            )
+    # Registry per-chat juga dibersihkan bila menunjuk pesan yang sama.
+    messages = bot_data.get(ACK_MESSAGES_KEY)
+    if isinstance(messages, dict) and messages.get(chat_id) == message_id:
+        messages.pop(chat_id, None)
+    await query.answer(text)
+
+
+def _extract_job_from_queue(queue: asyncio.Queue, token: str) -> Any | None:
+    """Keluarkan job bertoken `token` dari `queue` tanpa mengganggu FIFO lain.
+
+    Job yang TIDAK cocok dikembalikan ke antrean dengan urutan semula, jadi
+    membatalkan satu permintaan tidak menyentuh job lain (T-216 butir f).
+
+    Awas penghitung: `asyncio.Queue.put()` menaikkan `_unfinished_tasks`, jadi
+    pemasukan kembali item harus "dibayar" dengan `task_done()` agar `join()`
+    tidak pernah menggantung. Job yang DIBUANG tidak akan pernah diproses
+    worker (tidak ada `task_done` dari sana), jadi buku besar ditutup di sini:
+    `task_done()` dipanggil SEKALI untuk setiap item yang diambil - n item
+    diambil, n-1 dimasukkan kembali (masing-masing menambah 1 tugas), lalu
+    (n-1) kali `task_done()` + 1 kali untuk job yang dibuang.
+    """
+    pending: list[Any] = []
+    found = None
+    taken = 0
+    while True:
+        try:
+            job = queue.get_nowait()
+        except asyncio.QueueEmpty:
+            break
+        taken += 1
+        if found is None and getattr(job, "token", None) == token:
+            found = job
+        else:
+            pending.append(job)
+    for job in pending:
+        queue.put_nowait(job)
+    # Tutup buku besar: `get_nowait` sendiri tidak menurunkan `_unfinished_tasks`.
+    for _ in range(taken):
+        queue.task_done()
+    return found
+
+
 async def admit_advance_job(
     update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -175,29 +441,32 @@ async def admit_advance_job(
     settings = bot_data["settings"]
     queue = _get_default_queue(bot_data, settings)
     _ensure_workers(bot_data, settings)
+    chat_id = update.effective_chat.id
+    # T-213: token unik untuk tombol Batalkan job ini; ack terkirim hanya
+    # setelah admission sukses (pola T-113), jadi tidak ada ack yatim.
+    token = _new_ack_token(chat_id)
+    ack_text = f"{ACK_TEXT} (antrean: {queue.qsize() + 1})" if queue.qsize() else ACK_TEXT
     counter = _task_counter_of(bot_data)
     if counter is not None:
         counter[0] += 1
     try:
-        queue.put_nowait(build_job(update, url, context, selection))
+        queue.put_nowait(replace(build_job(update, url, context, selection), token=token))
     except asyncio.QueueFull:
         if counter is not None:
             counter[0] = max(0, counter[0] - 1)
         _stats_reject(bot_data, "queue_full")
         logger.info(
             "antrean penuh (chat %s, maxsize %s): permintaan advance ditolak",
-            update.effective_chat.id,
+            chat_id,
             queue.maxsize,
         )
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=MSG_QUEUE_FULL)
+        await context.bot.send_message(chat_id=chat_id, text=MSG_QUEUE_FULL)
         return False
-    chat_id = update.effective_chat.id
-    if queue.qsize() > 1:
-        await context.bot.send_message(
-            chat_id=chat_id, text=f"{ACK_TEXT} (antrean: {queue.qsize()})"
-        )
-    else:
-        await context.bot.send_message(chat_id=chat_id, text=ACK_TEXT)
+    ack_text = f"{ACK_TEXT} (antrean: {queue.qsize()})" if queue.qsize() > 1 else ACK_TEXT
+    ack_message = await context.bot.send_message(
+        chat_id=chat_id, text=ack_text, reply_markup=_ack_markup(token)
+    )
+    _record_ack(bot_data, chat_id, token, ack_message)
     return True
 
 
@@ -317,15 +586,24 @@ async def run_job(
                     result = await downloader_service.download(url, settings)
                 else:
                     result = await downloader_service.download(url, settings, job.selection)
-                uploaded = await _upload_after_download(
-                    context, url, result, chat_id, settings, job.selection
-                )
+                # WP-21/T-213 (FR-022): titik aman pembatalan. Tombol Batalkan
+                # TIDAK bisa menghentikan `yt-dlp` blocking di `to_thread`, jadi
+                # job yang sudah ditandai dilewati DI SINI (setelah download,
+                # sebelum upload) dan TIDAK diklaim "download dihentikan".
+                if _ack_cancelled(bot_data, job.token):
+                    logger.info("job dibatalkan setelah download (chat %s): %s", chat_id, url)
+                else:
+                    uploaded = await _upload_after_download(
+                        context, url, result, chat_id, settings, job.selection
+                    )
                 # T-164 (FR-021): hanya upload yang benar-benar tersampaikan yang
                 # dihitung "diproses"; kegagalan download maupun upload masuk
                 # `download_failed`. Tidak ada perubahan aliran/teks di atas.
                 if uploaded:
                     _stats_processed(bot_data)
                 else:
+                    # Kegagalan upload maupun job yang dibatalkan di titik aman
+                    # sama-sama tidak menghasilkan video terkirim (T-164).
                     _stats_reject(bot_data, "download_failed")
             except Exception as exc:
                 _stats_reject(bot_data, "download_failed")
@@ -350,6 +628,15 @@ async def run_job(
         # me-naik-kannya sendiri. Handler menaikkan hanya saat admit sukses;
         # jalur tolak (QueueFull) tidak pernah menyisakan inc menggantung.
         _counter_change(bot_data, -1)
+        # T-212 (FR-007/FR-008/FR-009): HAPUS pesan ack di sini supaya berlaku
+        # untuk TIGA terminal state: upload sukses, kegagalan upload
+        # (`UploadError`/`Exception`), dan kegagalan download (`except Exception`
+        # di atas). `_delete_ack` menelan `BadRequest`/`MessageCantBeDeleted`
+        # dan hanya `logger.warning`; `run_job` tidak pernah raise.
+        await _delete_ack(context.bot, bot_data, chat_id, job.token)
+        # Token dibuang supaya tombol `ac:<token>` yang ditekan setelah job
+        # selesai dijawab halus oleh `cancel_ack_callback`, bukan error.
+        _drop_ack_token(bot_data, job.token)
     return uploaded
 
 
@@ -420,11 +707,13 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     queue = _get_default_queue(bot_data, settings)
     _ensure_workers(bot_data, settings)
 
+    # T-213: token unik per job -> tombol Batalkan `ac:<token>`.
+    token = _new_ack_token(chat_id)
     counter = _task_counter_of(bot_data)
     if counter is not None:
         counter[0] += 1
     try:
-        queue.put_nowait(build_job(update, url, context))
+        queue.put_nowait(replace(build_job(update, url, context), token=token))
     except asyncio.QueueFull:
         if counter is not None:
             counter[0] = max(0, counter[0] - 1)
@@ -440,7 +729,8 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     # Ack T-113: setelah admit, sebelum pekerjaan berat apa pun. Angka antrean
     # (`qsize()`) adalah teks TAMBAHAN setelah frasa kunci WP-06; test lama
     # mencocokkan substring/list literal dan tetap lolos saat `qsize()` 0.
-    if queue.qsize() > 1:
-        await update.message.reply_text(f"{ACK_TEXT} (antrean: {queue.qsize()})")
-    else:
-        await update.message.reply_text(ACK_TEXT)
+    # T-211: `message_id` ack dicatat per chat supaya `run_job` bisa
+    # menghapusnya di `finally` (FR-007). Angka = posisi job ini di antrean.
+    ack_text = f"{ACK_TEXT} (antrean: {queue.qsize()})" if queue.qsize() > 1 else ACK_TEXT
+    ack_message = await update.message.reply_text(ack_text, reply_markup=_ack_markup(token))
+    _record_ack(bot_data, chat_id, token, ack_message)
