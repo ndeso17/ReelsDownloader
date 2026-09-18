@@ -170,10 +170,10 @@ async def main() -> None:
             [
                 ("start", "Selamat datang + menu singkat"),
                 ("help", "Panduan penggunaan (Instagram/Facebook/TikTok)"),
-                ("getID", "Lihat Telegram ID kamu"),
+                ("getid", "Lihat Telegram ID kamu"),
                 ("menu", "Daftar command + status akses"),
                 ("advance", "Download dengan pilihan (user terdaftar)"),
-                ("setUser", "Kelola user (admin, private mode)"),
+                ("setuser", "Kelola user (admin, private mode)"),
                 ("cancel", "Batalkan dialog aktif (user terdaftar)"),
                 ("stats", "Statistik pemakaian (admin)"),
             ]
