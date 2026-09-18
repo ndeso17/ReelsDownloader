@@ -84,14 +84,14 @@ MSG_ACK_CANCEL_DONE = "✅ Permintaan ini sudah selesai diproses."
 ACK_CANCELLED_SUFFIX = " (dibatalkan)"
 
 _START_TEXT = (
-    "👋 Instagram/Facebook/TikTok Downloader\n"
+    "👋 Instagram/Facebook/YouTube Downloader\n"
     "\n"
-    "Kirim link Instagram, Facebook, atau TikTok Reels\n"
+    "Kirim link Instagram, Facebook, atau YouTube Reels/Short\n"
     "dan saya akan mencoba mengunduh videonya.\n"
     "\n"
     "Contoh:\n"
     "https://www.instagram.com/reel/xxxxx/\n"
-    "https://www.tiktok.com/@user/video/1234567890"
+    "https://www.youtube.com/watch?v=xxxxx\n"
 )
 
 

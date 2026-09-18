@@ -1,7 +1,6 @@
-"""URL validator + platform detection untuk Instagram / Facebook / TikTok (FR-003, FR-004, FR-020).
+"""URL validator + platform detection untuk Instagram / Facebook / YouTube (FR-003, FR-004, FR-020).
 
-Sumber kebenaran ALLOWED_HOSTS: level modul, 10 host (6 lama + 4 TikTok,
-termasuk shortlink `vt`/`vm`), exact-match.
+Sumber kebenaran ALLOWED_HOSTS: level modul, 10 host exact-match.
 Import top-level (AGENTS.md §4.2).
 """
 
@@ -16,17 +15,17 @@ ALLOWED_HOSTS = {
     "fb.watch",
     "instagram.com",
     "m.facebook.com",
-    "tiktok.com",
-    "vm.tiktok.com",
-    "vt.tiktok.com",
+    "m.youtube.com",
     "www.facebook.com",
     "www.instagram.com",
-    "www.tiktok.com",
+    "www.youtube.com",
+    "youtube.com",
+    "youtu.be",
 }
 
 
 class UnsupportedUrlError(Exception):
-    """URL bukan Instagram/Facebook/TikTok."""
+    """URL bukan Instagram/Facebook/YouTube."""
 
 
 def extract_url(text: str) -> str | None:
@@ -38,7 +37,7 @@ def extract_url(text: str) -> str | None:
 
 
 def validate_url(url: str) -> str:
-    """Validasi URL: hanya Instagram/Facebook/TikTok exact-match.
+    """Validasi URL: hanya Instagram/Facebook/YouTube exact-match.
 
     Mengembalikan URL ternormalisasi (scheme + hostname lowercase + komponen
     lain) bila valid. Menaikkan UnsupportedUrlError untuk host/scheme/kosong.
@@ -73,7 +72,7 @@ def validate_url(url: str) -> str:
     )
 
 
-def detect_platform(url: str) -> Literal["instagram", "facebook", "tiktok"]:
+def detect_platform(url: str) -> Literal["instagram", "facebook", "youtube"]:
     """Deteksi platform dari hostname (FR-003/FR-007/FR-020)."""
     parsed = urlparse(url)
     if not parsed.hostname:
@@ -87,7 +86,12 @@ def detect_platform(url: str) -> Literal["instagram", "facebook", "tiktok"]:
     if host in {"facebook.com", "www.facebook.com", "m.facebook.com", "fb.watch"}:
         return "facebook"
 
-    if host in {"www.tiktok.com", "tiktok.com", "vm.tiktok.com", "vt.tiktok.com"}:
-        return "tiktok"
+    if host in {
+        "www.youtube.com",
+        "youtube.com",
+        "m.youtube.com",
+        "youtu.be",
+    }:
+        return "youtube"
 
     raise UnsupportedUrlError(f"Host tidak didukung: '{host}'")

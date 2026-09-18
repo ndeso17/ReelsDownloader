@@ -169,7 +169,7 @@ async def main() -> None:
         outcome = application.bot.set_my_commands(
             [
                 ("start", "Selamat datang + menu singkat"),
-                ("help", "Panduan penggunaan (Instagram/Facebook/TikTok)"),
+                ("help", "Panduan penggunaan (Instagram/Facebook/YouTube)"),
                 ("getid", "Lihat Telegram ID kamu"),
                 ("menu", "Daftar command + status akses"),
                 ("advance", "Download dengan pilihan (user terdaftar)"),

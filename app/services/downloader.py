@@ -169,7 +169,7 @@ async def download(
     settings: Settings,
     selection: Selection | None = None,
 ) -> DownloadResult:
-    """Download satu URL IG/FB/TikTok public, kembalikan path + metadata.
+    """Download satu URL IG/FB/YouTube public, kembalikan path + metadata.
 
     Naik: `FileTooLargeError` (pre-check atau pasca-ekstraksi audio),
     `PrivateVideoError`, `VideoNotFoundError`, `DownloadFailedError`, atau

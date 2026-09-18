@@ -26,8 +26,8 @@ UPLOAD_TIMEOUT_SECONDS = 30
 
 
 #: FR-007/FR-020: nama tampilan platform di caption. Peta eksplisit, bukan
-#: `.capitalize()` (itu menghasilkan "Tiktok" yang salah kapitalisasi).
-_PLATFORM_DISPLAY = {"instagram": "Instagram", "facebook": "Facebook", "tiktok": "TikTok"}
+#: `.capitalize()` (itu menghasilkan "Youtube" yang salah kapitalisasi).
+_PLATFORM_DISPLAY = {"instagram": "Instagram", "facebook": "Facebook", "youtube": "YouTube"}
 
 
 def build_caption(
@@ -37,7 +37,7 @@ def build_caption(
     audio: bool = False,
     note: str | None = None,
 ) -> str:
-    """Caption FR-007: ``🎬 {title}\\n\\nSource: Instagram|Facebook|TikTok``.
+    """Caption FR-007: ``🎬 {title}\\n\\nSource: Instagram|Facebook|YouTube``.
 
     ``{platform}`` dari ``detect_platform()`` (T-038/T-182) dipetakan lewat
     ``_PLATFORM_DISPLAY``; title kosong tetap menghasilkan caption valid (bukan

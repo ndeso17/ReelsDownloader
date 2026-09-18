@@ -1,7 +1,7 @@
-# ReelsDownloader - Telegram Reels Downloader (Instagram / Facebook / TikTok)
+# ReelsDownloader - Telegram Reels Downloader (Instagram / Facebook / YouTube)
 
 Bot Telegram penggunaan pribadi: kirim URL video publik dari Instagram, Facebook,
-atau TikTok, bot memvalidasi domain, mengunduh dengan `yt-dlp` (FFmpeg merge
+atau YouTube, bot memvalidasi domain, mengunduh dengan `yt-dlp` (FFmpeg merge
 lewat yt-dlp), mengirim video/audio balik dengan caption, lalu menghapus file
 sementara. Tanpa database, tanpa Redis, tanpa worker eksternal, tanpa login
 platform.
@@ -17,11 +17,11 @@ Kontrol dasar:
   berfungsi; teks welcome dan menu dikirim sebagai dua pesan terpisah.
 - Deteksi URL otomatis di tengah teks biasa (regex `https?://\S+`), tanpa command
   khusus; teks tanpa URL dibalas panduan `/start`.
-- Download publik Instagram Reels/Post, Facebook Video/Reels, dan TikTok (termasuk
-  shortlink `vm.tiktok`/`vt.tiktok`) via `yt-dlp` + FFmpeg; mode default berperilaku
-  identik dengan v1.0 untuk IG/FB.
+- Download publik Instagram Reels/Post, Facebook Video/Reels, dan YouTube
+  Shorts/video biasa (termasuk shortlink `youtu.be`) via `yt-dlp` + FFmpeg; mode
+  default berperilaku identik dengan v1.0 untuk IG/FB.
 - Kirim hasil sebagai video (mp4, merge lewat FFmpeg) atau audio saja (mp3),
-  dengan caption `🎬 {judul}` / `🎵 {judul}` + `Source: Instagram`/`Facebook`/`TikTok`.
+  dengan caption `🎬 {judul}` / `🎵 {judul}` + `Source: Instagram`/`Facebook`/`YouTube`.
 - Fallback `send_document` saat `send_video`/`send_audio` ditolak Telegram
   (mis. file > 50 MB atau codec tidak didukung) supaya user tetap menerima hasil.
 - Batas ukuran file `MAX_FILE_SIZE_MB` (dicek dari metadata sebelum unduh dan saat
@@ -262,7 +262,7 @@ ruff format --check .
 .venv/bin/python -m pytest -q --tb=short
 ```
 
-Semua test jalan tanpa akses Instagram/Facebook/TikTok nyata (yt-dlp dan bot di-mock).
+Semua test jalan tanpa akses Instagram/Facebook/YouTube nyata (yt-dlp dan bot di-mock).
 `tests/test_wp13.py` otomatis *skip* bila daemon/image Docker tidak ada.
 
 ## Ops
@@ -319,7 +319,7 @@ Keduanya memuat identifier Telegram = PII:
 | Kondisi | Pesan bot | Penyebab / langkah |
 |---|---|---|
 | URL tidak valid | `❌ URL tidak valid` | URL tidak bisa diparse; minta link lengkap `https://...` |
-| URL tidak didukung | `❌ URL tidak didukung. Kirim link Instagram/Facebook/TikTok.` | Domain di luar whitelist 10 host (jalur validasi membalas `Host tidak didukung: '<host>'`) |
+| URL tidak didukung | `❌ URL tidak didukung. Kirim link Instagram/Facebook/YouTube.` | Domain di luar whitelist 10 host (jalur validasi membalas `Host tidak didukung: '<host>'`) |
 | Video private | `🔒 Video private/terbatas.` | Akun privat / butuh login / age-restricted. Bot **tidak** mengakali login (PRD §6/§9) |
 | Video tidak ditemukan | `🔍 Video tidak ditemukan.` | Post dihapus / URL salah / extractor tidak mendukung format itu |
 | Download gagal | `⚠️ Gagal mengunduh.` | Jaringan/sumber bermasalah; cek `docker logs` untuk traceback |
@@ -357,7 +357,7 @@ Masalah umum lain:
   sebagai volume; cek `-v "$PWD/data:/app/data"` + `USERS_FILE=/app/data/users.json`.
 - **`File hasil download tidak ditemukan` / merge error di Docker** → FFmpeg tidak ada
   atau volume `/app/downloads` tidak bisa ditulis (`appuser` uid 10001).
-- **Instagram/Facebook/TikTok berhenti mendukung** → biasanya perubahan extractor
+- **Instagram/Facebook/YouTube berhenti mendukung** → biasanya perubahan extractor
   `yt-dlp`; `pip install -U yt-dlp` lalu rebuild image.
 - **Dialog advance tidak bisa dilanjutkan setelah restart** → state `DialogState`
   in-memory; restart = reset. Kirim `/advance` ulang.

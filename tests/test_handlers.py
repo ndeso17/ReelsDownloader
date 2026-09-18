@@ -24,7 +24,7 @@ from app.services.rate_limiter import UserRateLimiter
 from tests.queue_support import JobCollector
 
 VALID_URL = "https://www.instagram.com/reel/xxxxx/"
-START_MARKER = "👋 Instagram/Facebook/TikTok Downloader"
+START_MARKER = "👋 Instagram/Facebook/YouTube Downloader"
 
 
 def make_update(text: str, chat_id: int = 123456) -> MagicMock:
@@ -82,14 +82,14 @@ async def test_start_text_matches_prd_fr001():
     update = make_update("/start")
     await start(update, make_context(UserRateLimiter(10), Settings.model_construct()))
     assert update.message.reply_text.call_args.args[0] == (
-        "👋 Instagram/Facebook/TikTok Downloader\n"
+        "👋 Instagram/Facebook/YouTube Downloader\n"
         "\n"
-        "Kirim link Instagram, Facebook, atau TikTok Reels\n"
+        "Kirim link Instagram, Facebook, atau YouTube Reels/Short\n"
         "dan saya akan mencoba mengunduh videonya.\n"
         "\n"
         "Contoh:\n"
         "https://www.instagram.com/reel/xxxxx/\n"
-        "https://www.tiktok.com/@user/video/1234567890"
+        "https://www.youtube.com/watch?v=xxxxx\n"
     )
 
 
@@ -103,7 +103,7 @@ async def test_help_contains_usage_instructions():
     assert "cara penggunaan" in lowered
     assert "kirim" in lowered
     assert "instagram" in lowered and "facebook" in lowered
-    assert "tiktok" in lowered
+    assert "youtube" in lowered
 
 
 # ---------------- T-063 teks tanpa URL → minta URL, tanpa crash ----------------

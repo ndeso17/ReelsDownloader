@@ -67,8 +67,8 @@ class RateLimitedError(Exception):
 # adanya dari `downloader.download` (lihat test_downloader.py T-046).
 # ---------------------------------------------------------------------------
 
-#: FR-009 #2: URL di luar whitelist Instagram/Facebook/TikTok.
-MSG_URL_UNSUPPORTED = "❌ URL tidak didukung. Kirim link Instagram/Facebook/TikTok."
+#: FR-009 #2: URL di luar whitelist Instagram/Facebook/YouTube.
+MSG_URL_UNSUPPORTED = "❌ URL tidak didukung. Kirim link Instagram/Facebook/YouTube."
 
 #: FR-009 #1: URL tidak bisa diparse / bukan URL.
 MSG_URL_INVALID = "❌ URL tidak valid"
