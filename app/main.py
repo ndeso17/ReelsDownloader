@@ -44,6 +44,12 @@ def configure_logging(level: str) -> None:
         level=getattr(logging, level),
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # AGENTS.md §5: token hanya boleh ada di env, tidak di log. Logger pihak
+    # ketiga di bawah ini mencetak URL Telegram apa adanya, dan URL itu memuat
+    # token (`https://api.telegram.org/bot<token>/...`). Dipaksa WARNING supaya
+    # `LOG_LEVEL=DEBUG` tetap berguna untuk kode sendiri tanpa membocorkan token.
+    for noisy in ("httpx", "httpcore", "telegram.ext"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 async def _flush_stats(application) -> None:
