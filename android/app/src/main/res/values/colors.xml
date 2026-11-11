@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sampel dari ReelsDownloader.png: navy gelap dominan pada pelat ikon. -->
+    <color name="ic_launcher_background">#001040</color>
+</resources>

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # WP-20 hygiene + gate check script (executor helper)
-# Usage: bash ops/hygiene-check.sh
-# All checks pass = exit 0, otherwise exit non-zero.
+# Usage: bash bot/ops/hygiene-check.sh   (dari root repo)
+# All checks pass = exit 0, otherwise non-zero.
 
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.."          # -> bot/
+ROOT="$(cd .. && pwd)"           # -> root repo
 
 PASS=0
 FAIL=0
@@ -26,7 +27,7 @@ fi
 
 # 2. .gitignore covers users.json, stats.json, .tmp
 echo "--- Gitignore coverage ---"
-GITIGNORE=$(cat .gitignore)
+GITIGNORE=$(cat "$ROOT/.gitignore")
 for pat in "users.json" "stats.json" ".tmp"; do
   if echo "$GITIGNORE" | grep -qF "$pat"; then
     pass ".gitignore covers $pat"
@@ -46,25 +47,25 @@ fi
 
 # 4. No AGENTS.md or docs/agents/ tracked
 echo "--- Agent docs not tracked ---"
-AGENT_COUNT=$(git ls-files | grep -cE 'AGENTS\.md|docs/agents/' || true)
+AGENT_COUNT=$(git ls-files | grep -cE 'AGENTS\.md|(^|/)docs/agents/' || true)
 if [ "$AGENT_COUNT" = "0" ]; then
   pass "No AGENTS.md or docs/agents/ in git ls-files"
 else
-  fail "Agent docs leaked to tracking: $(git ls-files | grep -E 'AGENTS\.md|docs/agents/')"
+  fail "Agent docs leaked to tracking: $(git ls-files | grep -E 'AGENTS\.md|(^|/)docs/agents/')"
 fi
 
 # 5. No .env* committed (only .env.example)
 echo "--- .env files not committed ---"
-ENV_COUNT=$(git ls-files | grep -cE '^\.env($|\.)' || true)
+ENV_COUNT=$(git ls-files | grep -cE '(^|/)\.env($|\.)' || true)
 if [ "$ENV_COUNT" = "1" ]; then
   pass "Only .env.example committed (1 file)"
 else
-  fail ".env files in repo: $(git ls-files | grep '^\.env')"
+  fail ".env files in repo: $(git ls-files | grep -E '(^|/)\.env')"
 fi
 
 # 6. ruff check + format
 echo "--- ruff ---"
-if ruff check . >/dev/null 2>&1 && ruff format --check . >/dev/null 2>&1; then
+if python -m ruff check . >/dev/null 2>&1 && python -m ruff format --check . >/dev/null 2>&1; then
   pass "ruff check + format OK"
 else
   fail "ruff check or format failed"

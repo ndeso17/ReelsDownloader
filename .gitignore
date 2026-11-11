@@ -59,6 +59,7 @@ AGENTS.md
 
 ## Agent workspace (local only)
 docs/agents/
+bot/docs/agents/
 
 ## WP-02 (T-021): repo hygiene. APPEND ONLY: baris di atas (`.env*`, `AGENTS.md`,
 ## `docs/agents/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`) tidak diubah.
@@ -95,3 +96,32 @@ Arsitektur.md
 ArsitekturRules.md
 PRD.md
 Struktur.md
+
+## Monorepo restructure (bot/ + android/)
+bot/downloads/*
+!bot/downloads/.gitkeep
+bot/.venv/
+bot/.pytest_cache/
+bot/.ruff_cache/
+bot/PRD.md
+bot/Struktur.md
+bot/Arsitektur.md
+bot/ArsitekturRules.md
+bot/docs/agents/
+
+## Android (Gradle/IDE/keystore)
+android/.gradle/
+android/.kotlin/
+android/**/build/
+android/local.properties
+android/.idea/
+android/captures/
+*.jks
+*.keystore
+android/keystore/keystore.properties
+!android/keystore/keystore.properties.example
+*.apk
+*.aab
+
+## Android wrapper jar (dibutuhkan, jangan diabaikan)
+!android/gradle/wrapper/gradle-wrapper.jar

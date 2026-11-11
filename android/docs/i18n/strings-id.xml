@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Terjemahan Bahasa Indonesia untuk Reels Downloader Android.
+WP-A12 menyalin file ini ke android/app/src/main/res/values-id/strings.xml.
+Pakai folder values-id (bukan values-in) sesuai konvensi WhatsVault.
+Nama platform (Instagram/Facebook/YouTube) dan emoji tidak diterjemahkan.
+-->
+<resources>
+    <string name="app_desc">Unduh video publik dari Instagram, Facebook, dan YouTube</string>
+
+    <!-- Tab -->
+    <string name="tab_download">Unduh</string>
+    <string name="tab_history">Riwayat</string>
+    <string name="tab_settings">Pengaturan</string>
+
+    <!-- Beranda -->
+    <string name="home_url_label">Tautan video</string>
+    <string name="home_url_placeholder">Tempel tautan Instagram, Facebook, atau YouTube</string>
+    <string name="home_paste">Tempel</string>
+    <string name="home_paste_empty">Clipboard tidak berisi tautan</string>
+    <string name="home_detected_platform">Terdeteksi: %1$s</string>
+    <string name="home_type_label">Jenis hasil</string>
+    <string name="home_type_video">🎬 Video</string>
+    <string name="home_type_audio">🎵 Audio</string>
+    <string name="home_quality_label">Kualitas</string>
+    <string name="home_quality_best">Terbaik</string>
+    <string name="home_quality_1080p">1080p</string>
+    <string name="home_quality_720p">720p</string>
+    <string name="home_quality_480p">480p</string>
+    <string name="home_quality_360p">360p</string>
+    <string name="home_bitrate_320">320 kbps</string>
+    <string name="home_bitrate_192">192 kbps</string>
+    <string name="home_bitrate_128">128 kbps</string>
+    <string name="home_download">Unduh</string>
+
+    <!-- Status job -->
+    <string name="job_queued">Dalam antrean</string>
+    <string name="job_downloading">Mengunduh %1$d%%</string>
+    <string name="job_processing">Memproses…</string>
+    <string name="job_saving">Menyimpan ke galeri…</string>
+    <string name="job_done">✅ Selesai</string>
+    <string name="job_failed">Gagal</string>
+    <string name="job_cancelled">Dibatalkan</string>
+    <string name="job_cancel">Batalkan</string>
+    <string name="job_retry">Ulangi</string>
+    <string name="job_speed_eta">%1$s/detik · tersisa %2$s</string>
+    <string name="job_quality_actual">(%1$s→%2$s)</string>
+
+    <!-- Riwayat -->
+    <string name="history_empty">Belum ada unduhan</string>
+    <string name="history_play">Putar</string>
+    <string name="history_share">Bagikan</string>
+    <string name="history_delete">Hapus</string>
+    <string name="history_delete_confirm">Hapus file ini?</string>
+    <string name="history_delete_body">File akan dihapus dari penyimpanan perangkat Anda.</string>
+    <string name="history_open_folder">Buka folder</string>
+    <string name="history_size">%1$s</string>
+
+    <!-- Notifikasi -->
+    <string name="channel_download_name">Unduhan</string>
+    <string name="channel_download_desc">Progres dan hasil unduhan video</string>
+    <string name="notif_downloading">Mengunduh %1$s</string>
+    <string name="notif_done">✅ Unduhan selesai</string>
+    <string name="notif_failed">⚠️ Unduhan gagal</string>
+    <string name="notif_cancel">Batalkan</string>
+
+    <!-- Error -->
+    <string name="err_invalid_url">❌ Link tidak valid.</string>
+    <string name="err_unsupported_url">❌ Link tidak didukung (hanya Instagram/Facebook/YouTube).</string>
+    <string name="err_private">🔒 Video private/terbatas.</string>
+    <string name="err_not_found">🔍 Video tidak ditemukan.</string>
+    <string name="err_download_failed">⚠️ Gagal mengunduh.</string>
+    <string name="err_ffmpeg">⚠️ Gagal memproses video.</string>
+    <string name="err_too_large">📏 File terlalu besar.</string>
+    <string name="err_save_failed">⚠️ Gagal menyimpan file.</string>
+    <string name="err_timeout">⏱️ Timeout.</string>
+    <string name="err_no_network">📡 Tidak ada koneksi internet.</string>
+    <string name="err_engine_missing">⚙️ Mesin unduh belum siap. Buka Pengaturan untuk memasangnya.</string>
+
+    <!-- Pengaturan -->
+    <string name="settings_quality_default">Kualitas bawaan</string>
+    <string name="settings_type_default">Jenis hasil bawaan</string>
+    <string name="settings_max_size">Ukuran file maksimum (MB)</string>
+    <string name="settings_engine_version">Versi mesin</string>
+    <string name="settings_engine_update">Perbarui mesin</string>
+    <string name="settings_engine_updating">Memperbarui mesin…</string>
+    <string name="settings_engine_updated">Mesin diperbarui ke %1$s</string>
+    <string name="settings_engine_failed">Gagal memperbarui mesin</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_theme_system">Ikuti sistem</string>
+    <string name="settings_theme_light">Terang</string>
+    <string name="settings_theme_dark">Gelap</string>
+    <string name="settings_language">Bahasa</string>
+    <string name="settings_language_system">Ikuti sistem</string>
+    <string name="settings_about">Tentang</string>
+    <string name="settings_version">Versi %1$s</string>
+    <string name="settings_disclaimer">Unduh hanya konten yang berhak Anda gunakan. Aplikasi ini hanya menangani tautan publik.</string>
+
+    <!-- Izin -->
+    <string name="perm_notification_rationale">Notifikasi dipakai untuk menampilkan progres unduhan.</string>
+    <string name="perm_grant">Izinkan</string>
+    <string name="perm_denied">Izin ditolak. Unduhan tetap berjalan tetapi progres tidak ditampilkan.</string>
+
+    <!-- Share sheet -->
+    <string name="share_received">Tautan diterima dari aplikasi lain</string>
+</resources>

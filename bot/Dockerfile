@@ -5,7 +5,7 @@
 #
 # MANUAL-VERIFY (Docker): SC PRD §8 butir 9 ("jalan 24/7 di VPS") TIDAK bisa
 # diotomasi, jadi dijalankan manusia dengan resep ini lalu dicatat di
-# docs/agents/PLAN.md (bagian Log WP-13):
+# bot/docs/agents/PLAN.md (bagian Log WP-13):
 #   1. docker build -t reelsdownloader:wp13 .                      -> exit 0
 #   2. docker run --rm -e TELEGRAM_BOT_TOKEN '<token dummy>' \
 #        -v "$PWD/downloads:/app/downloads" reelsdownloader:wp13 \

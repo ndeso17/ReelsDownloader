@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Sumber string Bahasa Inggris untuk Reels Downloader Android.
+WP-A12 menyalin file ini ke android/app/src/main/res/values/strings.xml.
+Aturan: format string pakai %1$s (bernomor), emoji TIDAK diterjemahkan,
+nama platform (Instagram/Facebook/YouTube) TIDAK diterjemahkan.
+-->
+<resources>
+    <string name="app_name" translatable="false">Reels Downloader</string>
+    <string name="app_desc">Download public videos from Instagram, Facebook, and YouTube</string>
+
+    <!-- Tabs -->
+    <string name="tab_download">Download</string>
+    <string name="tab_history">History</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Home -->
+    <string name="home_url_label">Video link</string>
+    <string name="home_url_placeholder">Paste an Instagram, Facebook, or YouTube link</string>
+    <string name="home_paste">Paste</string>
+    <string name="home_paste_empty">Clipboard has no link</string>
+    <string name="home_detected_platform">Detected: %1$s</string>
+    <string name="home_type_label">Result type</string>
+    <string name="home_type_video">🎬 Video</string>
+    <string name="home_type_audio">🎵 Audio</string>
+    <string name="home_quality_label">Quality</string>
+    <string name="home_quality_best">Best</string>
+    <string name="home_quality_1080p">1080p</string>
+    <string name="home_quality_720p">720p</string>
+    <string name="home_quality_480p">480p</string>
+    <string name="home_quality_360p">360p</string>
+    <string name="home_bitrate_320">320 kbps</string>
+    <string name="home_bitrate_192">192 kbps</string>
+    <string name="home_bitrate_128">128 kbps</string>
+    <string name="home_download">Download</string>
+
+    <!-- Job states -->
+    <string name="job_queued">Queued</string>
+    <string name="job_downloading">Downloading %1$d%%</string>
+    <string name="job_processing">Processing…</string>
+    <string name="job_saving">Saving to gallery…</string>
+    <string name="job_done">✅ Done</string>
+    <string name="job_failed">Failed</string>
+    <string name="job_cancelled">Cancelled</string>
+    <string name="job_cancel">Cancel</string>
+    <string name="job_retry">Retry</string>
+    <string name="job_speed_eta">%1$s/s · %2$s left</string>
+    <string name="job_quality_actual">(%1$s→%2$s)</string>
+
+    <!-- History -->
+    <string name="history_empty">No downloads yet</string>
+    <string name="history_play">Play</string>
+    <string name="history_share">Share</string>
+    <string name="history_delete">Delete</string>
+    <string name="history_delete_confirm">Delete this file?</string>
+    <string name="history_delete_body">The file will be removed from your device storage.</string>
+    <string name="history_open_folder">Open folder</string>
+    <string name="history_size">%1$s</string>
+
+    <!-- Notifications -->
+    <string name="channel_download_name">Downloads</string>
+    <string name="channel_download_desc">Progress and results of video downloads</string>
+    <string name="notif_downloading">Downloading %1$s</string>
+    <string name="notif_done">✅ Download finished</string>
+    <string name="notif_failed">⚠️ Download failed</string>
+    <string name="notif_cancel">Cancel</string>
+
+    <!-- Errors (teks disamakan dengan app/services/errors.py) -->
+    <string name="err_invalid_url">❌ Link is not valid.</string>
+    <string name="err_unsupported_url">❌ Link not supported (Instagram/Facebook/YouTube only).</string>
+    <string name="err_private">🔒 Private/restricted video.</string>
+    <string name="err_not_found">🔍 Video not found.</string>
+    <string name="err_download_failed">⚠️ Download failed.</string>
+    <string name="err_ffmpeg">⚠️ Failed to process the video.</string>
+    <string name="err_too_large">📏 File is too large.</string>
+    <string name="err_save_failed">⚠️ Failed to save the file.</string>
+    <string name="err_timeout">⏱️ Timed out.</string>
+    <string name="err_no_network">📡 No internet connection.</string>
+    <string name="err_engine_missing">⚙️ Download engine is not ready. Open Settings to install it.</string>
+
+    <!-- Settings -->
+    <string name="settings_quality_default">Default quality</string>
+    <string name="settings_type_default">Default result type</string>
+    <string name="settings_max_size">Maximum file size (MB)</string>
+    <string name="settings_engine_version">Engine version</string>
+    <string name="settings_engine_update">Update engine</string>
+    <string name="settings_engine_updating">Updating engine…</string>
+    <string name="settings_engine_updated">Engine updated to %1$s</string>
+    <string name="settings_engine_failed">Engine update failed</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">Follow system</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_disclaimer">Only download content you have the right to use. This app only handles public links.</string>
+
+    <!-- Permissions -->
+    <string name="perm_notification_rationale">Notifications are used to show download progress.</string>
+    <string name="perm_grant">Grant</string>
+    <string name="perm_denied">Permission denied. Downloads keep running but progress will not be shown.</string>
+
+    <!-- Share sheet -->
+    <string name="share_received">Link received from another app</string>
+</resources>
