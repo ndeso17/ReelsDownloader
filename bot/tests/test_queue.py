@@ -850,6 +850,7 @@ def test_job_new_fields_default_and_keyword_only():
         "selection",
         "ack_message_id",
         "token",
+        "message_thread_id",
     }
 
 

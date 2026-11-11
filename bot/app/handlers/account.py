@@ -28,6 +28,7 @@ from telegram.ext import ContextTypes
 from app.handlers.download import admit_advance_job
 from app.services import advance as advance_service
 from app.services import dialog as dialog_service
+from app.services import topic as topic_service
 from app.services import user_store
 from app.services.access import (
     MSG_ACCESS_DENIED,
@@ -266,21 +267,30 @@ async def advance_command(update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if dialog is None:
         # Defensif: startup tidak memasang dialog (mis. test lama) => skip diam-diam.
         return
-    chat_id = update.effective_chat.id
-    if dialog.active(chat_id):
-        dialog.clear(chat_id)
-        await update.effective_message.reply_text(dialog_service.MODE_OFF_TEXT)
+    # WP-25 (FR-023): kunci state WAJIB sama dengan `download_handler`
+    # (DM per chat, grup per user) supaya `/advance` benar-benar mengaktifkan
+    # sesi yang dibaca handler URL.
+    dialog_key = topic_service.dialog_key(update)
+    if dialog.active(dialog_key):
+        dialog.clear(dialog_key)
+        await update.effective_message.reply_text(
+            dialog_service.MODE_OFF_TEXT, **topic_service.send_kwargs(update)
+        )
         return
-    dialog.set(chat_id, step=dialog_service.STEP_LINK)
-    await update.effective_message.reply_text(dialog_service.MODE_TEXT)
+    dialog.set(dialog_key, step=dialog_service.STEP_LINK)
+    await update.effective_message.reply_text(
+        dialog_service.MODE_TEXT, **topic_service.send_kwargs(update)
+    )
 
 
 async def cancel_command(update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """FR-019: `/cancel` membatalkan mode/dialog aktif + hapus state."""
     dialog = context.bot_data.get("dialog")
     if dialog is not None:
-        dialog.clear(update.effective_chat.id)
-    await update.effective_message.reply_text(dialog_service.CANCEL_MENU)
+        dialog.clear(topic_service.dialog_key(update))
+    await update.effective_message.reply_text(
+        dialog_service.CANCEL_MENU, **topic_service.send_kwargs(update)
+    )
 
 
 async def advance_callback(update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -295,8 +305,16 @@ async def advance_callback(update, context: ContextTypes.DEFAULT_TYPE) -> None:
     basi (step/tipe tidak cocok) => toast tanpa efek (FR-016).
     """
     query = update.callback_query
+    # WP-25 (FR-023): callback tidak bisa difilter lewat `filters=` PTB, jadi
+    # scope topic diperiksa di sini (DM selalu lolos).
+    if not topic_service.is_allowed(update):
+        await query.answer(dialog_service.ANSWER_STALE)
+        return
     dialog = context.bot_data.get("dialog")
     chat_id = update.effective_chat.id
+    # WP-25 (FR-023): kunci state per user di grup, per chat di DM - sama dengan
+    # `download_handler` dan `/advance`.
+    dialog_key = topic_service.dialog_key(update)
     parsed = dialog_service.parse_callback(query.data or "")
     if parsed is None:
         # Format/data callback tidak dikenal: tidak sah (FR-016) -> toast basi.
@@ -306,19 +324,27 @@ async def advance_callback(update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if kind == "cancel":
         await query.answer()
         if dialog is not None:
-            dialog.clear(chat_id)
+            dialog.clear(dialog_key)
         await query.edit_message_reply_markup(reply_markup=None)
-        await context.bot.send_message(chat_id=chat_id, text=dialog_service.CANCEL_MENU)
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=dialog_service.CANCEL_MENU,
+            **topic_service.send_kwargs(update),
+        )
         return
-    expired = dialog is not None and dialog.is_expired(chat_id)
-    state = dialog.get(chat_id) if dialog is not None else None
+    expired = dialog is not None and dialog.is_expired(dialog_key)
+    state = dialog.get(dialog_key) if dialog is not None else None
     if kind is None or state is None:
         await query.answer(dialog_service.ANSWER_STALE)
         if expired:
-            await context.bot.send_message(chat_id=chat_id, text=dialog_service.MSG_EXPIRED)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=dialog_service.MSG_EXPIRED,
+                **topic_service.send_kwargs(update),
+            )
         return
     if kind == "mode" and state.step == dialog_service.STEP_TYPE:
-        dialog.set(chat_id, tipe=value, step=dialog_service.STEP_QUALITY)
+        dialog.set(dialog_key, tipe=value, step=dialog_service.STEP_QUALITY)
         await query.answer()
         await query.edit_message_text(
             text=dialog_service.PROMPT_QUALITY,
@@ -330,13 +356,13 @@ async def advance_callback(update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if state.tipe != wanted or state.url is None:
             await query.answer(dialog_service.ANSWER_STALE)
             return
-        updated = dialog.set(chat_id, kualitas=value)
+        updated = dialog.set(dialog_key, kualitas=value)
         selection = advance_service.resolve_selection(updated)
         if selection is None:  # pragma: no cover - dijaga parse whitelist
             await query.answer(dialog_service.ANSWER_STALE)
-            dialog.clear(chat_id)
+            dialog.clear(dialog_key)
             return
-        dialog.clear(chat_id)  # sekali-pakai; mode auto-off (FR-015:478)
+        dialog.clear(dialog_key)  # sekali-pakai; mode auto-off (FR-015:478)
         await query.answer()
         label = (
             f"Video · {'Best' if value == 'best' else f'{value}p'}"

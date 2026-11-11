@@ -33,6 +33,7 @@ from app.handlers.start import help_command, start
 from app.services.dialog import DialogState
 from app.services.rate_limiter import UserRateLimiter
 from app.services.stats import Stats
+from app.services.topic import IN_SCOPE
 from app.services.user_store import load_users
 from app.services.work_queue import ensure_workers, stop_workers
 
@@ -127,18 +128,22 @@ async def main() -> None:
     )
 
     # WP-06: handler /start, /help, deteksi URL (FR-001..FR-003, FR-011).
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_handler))
+    # WP-25 (FR-023): `filters=IN_SCOPE` = di grup bot hanya serves topic
+    # ShortVideo; di DM semua command tetap jalan seperti v2.2.
+    application.add_handler(CommandHandler("start", start, filters=IN_SCOPE))
+    application.add_handler(CommandHandler("help", help_command, filters=IN_SCOPE))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND & IN_SCOPE, download_handler)
+    )
 
     # WP-15: handler akses v2.2: `/getID`, `/menu`, `/setUser` (FR-012, FR-014, FR-016).
-    application.add_handler(CommandHandler("getID", get_id))
-    application.add_handler(CommandHandler("menu", menu))
-    application.add_handler(CommandHandler("setUser", set_user))
+    application.add_handler(CommandHandler("getID", get_id, filters=IN_SCOPE))
+    application.add_handler(CommandHandler("menu", menu, filters=IN_SCOPE))
+    application.add_handler(CommandHandler("setUser", set_user, filters=IN_SCOPE))
 
     # WP-19 (FR-015..FR-019): handler mode advance + dialog inline + `/cancel`.
-    application.add_handler(CommandHandler("advance", advance_command))
-    application.add_handler(CommandHandler("cancel", cancel_command))
+    application.add_handler(CommandHandler("advance", advance_command, filters=IN_SCOPE))
+    application.add_handler(CommandHandler("cancel", cancel_command, filters=IN_SCOPE))
     application.add_handler(CallbackQueryHandler(advance_callback, pattern=r"^ad:"))
     # WP-21 (T-213, FR-022): tombol `❌ Batalkan` pada pesan ack antrean.
     # Prefix `ac:` SENGAJA beda dari `ad:` WP-19 supaya kedua
@@ -148,7 +153,7 @@ async def main() -> None:
     # T-166 (FR-020): handler `/stats` admin. `menu`/`help` tetap tidak menyebut
     # `/stats` di teksnya agar konsisten (teks tertanam di `app/handlers/start.py`,
     # `app/services/access.py`).
-    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("stats", stats_command, filters=IN_SCOPE))
 
     await application.initialize()
     await application.start()

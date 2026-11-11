@@ -71,6 +71,7 @@ async def send_video(
     max_file_size_mb: int,
     metadata: dict | None = None,
     note: str | None = None,
+    thread_id: int | None = None,
 ) -> None:
     """Upload satu video ke Telegram (FR-007) dengan fallback document.
 
@@ -83,6 +84,7 @@ async def send_video(
     size_bytes = _file_size_bytes(file_path, metadata)
     limit_bytes = max_file_size_mb * 1024 * 1024
     send_document = size_bytes > limit_bytes
+    topic_kwargs = {"message_thread_id": thread_id} if thread_id is not None else {}
 
     try:
         if send_document:
@@ -91,6 +93,7 @@ async def send_video(
                 document=str(file_path),
                 caption=caption,
                 read_timeout=UPLOAD_TIMEOUT_SECONDS,
+                **topic_kwargs,
             )
             logger.info("upload via send_document: %s (%d bytes)", file_path, size_bytes)
         else:
@@ -99,6 +102,7 @@ async def send_video(
                 video=str(file_path),
                 caption=caption,
                 read_timeout=UPLOAD_TIMEOUT_SECONDS,
+                **topic_kwargs,
             )
             logger.info("upload via send_video: %s (%d bytes)", file_path, size_bytes)
     except TelegramError as exc:
@@ -114,6 +118,7 @@ async def send_audio(
     url: str,
     *,
     max_file_size_mb: int,
+    thread_id: int | None = None,
 ) -> None:
     """Upload satu file `.mp3` (FR-018): `send_audio`, fallback document.
 
@@ -124,6 +129,7 @@ async def send_audio(
     caption = build_caption(title, url, audio=True)
     size_bytes = _file_size_bytes(file_path, None)
     limit_bytes = max_file_size_mb * 1024 * 1024
+    topic_kwargs = {"message_thread_id": thread_id} if thread_id is not None else {}
 
     try:
         if size_bytes > limit_bytes:
@@ -132,6 +138,7 @@ async def send_audio(
                 document=str(file_path),
                 caption=caption,
                 read_timeout=UPLOAD_TIMEOUT_SECONDS,
+                **topic_kwargs,
             )
             logger.info("upload via send_document: %s (%d bytes)", file_path, size_bytes)
         else:
@@ -140,6 +147,7 @@ async def send_audio(
                 audio=str(file_path),
                 caption=caption,
                 read_timeout=UPLOAD_TIMEOUT_SECONDS,
+                **topic_kwargs,
             )
             logger.info("upload via send_audio: %s (%d bytes)", file_path, size_bytes)
     except TelegramError as exc:

@@ -34,6 +34,7 @@ from telegram.ext import ContextTypes
 
 from app.services import dialog as dialog_service
 from app.services import downloader as downloader_service
+from app.services import topic as topic_service
 from app.services.access import MSG_ACCESS_DENIED, can_download
 from app.services.advance import Selection, quality_note
 from app.services.errors import RateLimitedError, UploadError, user_message
@@ -82,6 +83,16 @@ MSG_ACK_CANCEL_QUEUED = "🗑️ Dibatalkan sebelum diproses."
 MSG_ACK_CANCEL_RUNNING = "⏹️ Permintaan dicatat; job dilewati di titik aman berikutnya."
 MSG_ACK_CANCEL_DONE = "✅ Permintaan ini sudah selesai diproses."
 ACK_CANCELLED_SUFFIX = " (dibatalkan)"
+
+
+def _thread_kwargs(thread_id: int | None) -> dict[str, int]:
+    """Kwarg `message_thread_id` untuk pengiriman dari worker (tanpa update).
+
+    `None` = DM (v2.2): kembalikan dict kosong supaya pemanggilan `send_message`
+    byte-identik dengan jalur lama (WP-25, FR-023).
+    """
+    return {"message_thread_id": thread_id} if thread_id is not None else {}
+
 
 _START_TEXT = (
     "👋 Instagram/Facebook/YouTube Downloader\n"
@@ -169,7 +180,10 @@ async def _notify_chat(job: Job, text: str) -> None:
     """
     await _delete_ack(job.context.bot, job.context.bot_data, job.chat_id, job.token)
     _drop_ack_token(job.context.bot_data, job.token)
-    await job.context.bot.send_message(chat_id=job.chat_id, text=text)
+    # WP-25 (FR-023): pesan dari worker tetap di topic asal (DM: tanpa kwarg).
+    await job.context.bot.send_message(
+        chat_id=job.chat_id, text=text, **_thread_kwargs(job.message_thread_id)
+    )
 
 
 def _task_counter_of(bot_data: dict) -> list[int] | None:
@@ -345,6 +359,13 @@ async def cancel_ack_callback(update, context: ContextTypes.DEFAULT_TYPE) -> Non
     yang ditekan setelah job selesai dijawab halus, bukan error.
     """
     query = update.callback_query
+    # WP-25 (FR-023): `CallbackQueryHandler` tidak menerima `filters=`, jadi
+    # scope topic diperiksa di sini. Tombol ack hanya pernah dikirim ke topic
+    # ShortVideo, tapi guard ini menjaga kalau pesan lama di topic lain masih
+    # menyimpan tombol.
+    if not topic_service.is_allowed(update):
+        await query.answer()
+        return
     data = getattr(query, "data", "") or ""
     token = data[len(ACK_CALLBACK_PREFIX) :] if data.startswith(ACK_CALLBACK_PREFIX) else ""
     bot_data = context.bot_data
@@ -460,11 +481,16 @@ async def admit_advance_job(
             chat_id,
             queue.maxsize,
         )
-        await context.bot.send_message(chat_id=chat_id, text=MSG_QUEUE_FULL)
+        await context.bot.send_message(
+            chat_id=chat_id, text=MSG_QUEUE_FULL, **topic_service.send_kwargs(update)
+        )
         return False
     ack_text = f"{ACK_TEXT} (antrean: {queue.qsize()})" if queue.qsize() > 1 else ACK_TEXT
     ack_message = await context.bot.send_message(
-        chat_id=chat_id, text=ack_text, reply_markup=_ack_markup(token)
+        chat_id=chat_id,
+        text=ack_text,
+        reply_markup=_ack_markup(token),
+        **topic_service.send_kwargs(update),
     )
     _record_ack(bot_data, chat_id, token, ack_message)
     return True
@@ -477,6 +503,7 @@ async def _upload_after_download(
     chat_id: int,
     settings,
     selection: Selection | None = None,
+    thread_id: int | None = None,
 ) -> bool:
     """T-087: setelah download sukses, kirim video/audio ke Telegram.
 
@@ -505,6 +532,8 @@ async def _upload_after_download(
         "title": safe_title,
         "url": url,
         "max_file_size_mb": settings.max_file_size_mb,
+        # WP-25 (FR-023): `None` (DM) -> uploader tidak menambah kwarg apa pun.
+        "thread_id": thread_id,
     }
     if result.is_audio:
         sender = send_audio
@@ -520,11 +549,17 @@ async def _upload_after_download(
         await sender(bot=context.bot, **kwargs)
     except UploadError as exc:
         logger.warning("upload gagal untuk %s: %s", url, exc)
-        await context.bot.send_message(chat_id=chat_id, text="⚠️ Gagal mengirim video ke Telegram.")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="⚠️ Gagal mengirim video ke Telegram.",
+            **_thread_kwargs(thread_id),
+        )
         return False
     except Exception:
         logger.exception("upload job error: %s", url)
-        await context.bot.send_message(chat_id=chat_id, text="⚠️ Gagal mengirim video.")
+        await context.bot.send_message(
+            chat_id=chat_id, text="⚠️ Gagal mengirim video.", **_thread_kwargs(thread_id)
+        )
         return False
     return True
 
@@ -594,7 +629,13 @@ async def run_job(
                     logger.info("job dibatalkan setelah download (chat %s): %s", chat_id, url)
                 else:
                     uploaded = await _upload_after_download(
-                        context, url, result, chat_id, settings, job.selection
+                        context,
+                        url,
+                        result,
+                        chat_id,
+                        settings,
+                        job.selection,
+                        job.message_thread_id,
                     )
                 # T-164 (FR-021): hanya upload yang benar-benar tersampaikan yang
                 # dihitung "diproses"; kegagalan download maupun upload masuk
@@ -612,7 +653,11 @@ async def run_job(
                 # dipertahankan karena test WP-06 `test_handlers.py` mengunci
                 # caplog.at_level(ERROR) untuk jalur ini; lihat Log WP-10.
                 logger.exception("download job failed for %s", url)
-                await context.bot.send_message(chat_id=chat_id, text=user_message(exc))
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=user_message(exc),
+                    **_thread_kwargs(job.message_thread_id),
+                )
             finally:
                 # FR-008: sukses atau gagal, file sementara harus hilang. `clean_dir`
                 # sinkron -> `asyncio.to_thread` (AGENTS.md §4.4). Cleanup gagal
@@ -648,11 +693,19 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     # ini: jalur antrean di bawah milik WP-17 (FR-022).
     bot_data = context.bot_data
     settings = bot_data["settings"]
+    # WP-25 (FR-023): di grup bot hanya melayani topic ShortVideo. Pesan di
+    # topic lain / General diabaikan DIAM-DIAM (tanpa balasan) supaya bot tidak
+    # berisik di grup. DM tidak terpengaruh (is_allowed selalu True).
+    if not topic_service.is_allowed(update):
+        logger.debug("pesan grup di luar topic ShortVideo diabaikan")
+        return
     user_id = update.effective_user.id if update.effective_user else None
     if not can_download(user_id, settings, bot_data.get("users", {})):
         # T-164 (FR-021): penolakan nyata, bukan sekadar teks tanpa URL.
         _stats_reject(bot_data, "access_denied")
-        await update.effective_message.reply_text(MSG_ACCESS_DENIED)
+        await update.effective_message.reply_text(
+            MSG_ACCESS_DENIED, **topic_service.send_kwargs(update)
+        )
         return
 
     if not update.message or not update.message.text:
@@ -662,24 +715,26 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     if url is None:
         # PLAN T-164: teks tanpa URL BUKAN penolakan (hanya minta ulang), jadi
         # sengaja tidak dihitung di stats.
-        await update.message.reply_text(_START_TEXT)
+        await update.message.reply_text(_START_TEXT, **topic_service.send_kwargs(update))
         return
 
     try:
         url = validate_url(url)
     except UnsupportedUrlError as exc:
         _stats_reject(bot_data, "unsupported_url")
-        await update.message.reply_text(str(exc))
+        await update.message.reply_text(str(exc), **topic_service.send_kwargs(update))
         return
 
     rate_limiter = bot_data["rate_limiter"]
     chat_id = update.effective_chat.id
+    # WP-25: di grup, rate limit per USER (topic dipakai bersama); DM per chat.
+    limiter_key = topic_service.actor_key(update)
 
     try:
-        await rate_limiter.acquire(chat_id)
+        await rate_limiter.acquire(limiter_key)
     except RateLimitedError as exc:
         _stats_reject(bot_data, "rate_limited")
-        await update.message.reply_text(str(exc))
+        await update.message.reply_text(str(exc), **topic_service.send_kwargs(update))
         return
 
     # ---- FR-015/FR-016: jalur dialog advance (link-first) ----
@@ -688,14 +743,19 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     # State mati/None => fallback ke antrean reguler (SC 16).
     dialog = bot_data.get("dialog")
     if dialog is not None:
-        state = dialog.get(chat_id)
-        if state is not None:
+        # WP-25 (FR-023): di topic ShortVideo dialog Video/Audio SELALU muncul
+        # (tanpa perlu /advance). Kunci state per user di grup supaya dua
+        # anggota tidak saling menimpa pilihan.
+        dialog_key = topic_service.dialog_key(update)
+        state = dialog.get(dialog_key)
+        if state is not None or topic_service.is_shortvideo_topic(update):
             # Link baru = sesi baru: pilihan tipe/kualitas lama dibuang
             # (FR-016 "satu sesi dialog = satu link").
-            dialog.set(chat_id, url=url, step=dialog_service.STEP_TYPE, tipe=None, kualitas=None)
+            dialog.set(dialog_key, url=url, step=dialog_service.STEP_TYPE, tipe=None, kualitas=None)
             await update.message.reply_text(
                 dialog_service.PROMPT_TYPE,
                 reply_markup=dialog_service.choice_keyboard(dialog_service.STEP_TYPE),
+                **topic_service.send_kwargs(update),
             )
             return
 
@@ -723,7 +783,7 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
             chat_id,
             queue.maxsize,
         )
-        await update.message.reply_text(MSG_QUEUE_FULL)
+        await update.message.reply_text(MSG_QUEUE_FULL, **topic_service.send_kwargs(update))
         return
 
     # Ack T-113: setelah admit, sebelum pekerjaan berat apa pun. Angka antrean
@@ -732,5 +792,7 @@ async def download_handler(update, context: ContextTypes.DEFAULT_TYPE):
     # T-211: `message_id` ack dicatat per chat supaya `run_job` bisa
     # menghapusnya di `finally` (FR-007). Angka = posisi job ini di antrean.
     ack_text = f"{ACK_TEXT} (antrean: {queue.qsize()})" if queue.qsize() > 1 else ACK_TEXT
-    ack_message = await update.message.reply_text(ack_text, reply_markup=_ack_markup(token))
+    ack_message = await update.message.reply_text(
+        ack_text, reply_markup=_ack_markup(token), **topic_service.send_kwargs(update)
+    )
     _record_ack(bot_data, chat_id, token, ack_message)

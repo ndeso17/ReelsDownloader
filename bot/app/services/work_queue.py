@@ -83,6 +83,10 @@ class Job:
     selection: Selection | None = None
     ack_message_id: int | None = None
     token: str | None = None
+    #: WP-25 (FR-023): `message_thread_id` topic asal. `None` = DM, jadi semua
+    #: temuan worker (ack kedaluwarsa, video/audio, pesan error) kembali ke DM
+    #: persis seperti v2.2.
+    message_thread_id: int | None = None
 
 
 def build_job(update: Any, url: str, context: Any, selection: Selection | None = None) -> Job:
@@ -101,6 +105,14 @@ def build_job(update: Any, url: str, context: Any, selection: Selection | None =
     chat_id = getattr(effective_chat, "id", 0)
     effective_user = getattr(update, "effective_user", None)
     user_id = getattr(effective_user, "id", None) if effective_user is not None else None
+    # WP-25 (FR-023): simpan thread asal supaya pengiriman hasil dari worker
+    # (task tanpa update) tetap mendarat di topic yang benar.
+    message = getattr(update, "effective_message", None)
+    if message is None:
+        message = getattr(update, "message", None)
+    thread_id = getattr(message, "message_thread_id", None) if message is not None else None
+    if isinstance(thread_id, bool) or not isinstance(thread_id, int):
+        thread_id = None
     return Job(
         chat_id=chat_id,
         user_id=user_id,
@@ -108,6 +120,7 @@ def build_job(update: Any, url: str, context: Any, selection: Selection | None =
         enqueued_at=time.monotonic(),
         context=context,
         selection=selection,
+        message_thread_id=thread_id,
     )
 
 
