@@ -24,6 +24,11 @@ Kualitas, tipe (video/audio), dan batas ukuran diatur di Settings; riwayat
 tersimpan sebagai galeri dengan hapus-per-entri (riwayat saja atau riwayat +
 berkas) dan pilihan berganda.
 
+Sebelum tombol Unduh ditekan, aplikasi menampilkan pratinjau: judul, pengunggah,
+durasi, resolusi yang benar-benar tersedia, perkiraan ukuran untuk pilihan
+kualitas saat itu, thumbnail, dan tombol untuk menonton dulu di aplikasi lain.
+Pratinjau hanya membaca metadata; kegagalannya tidak pernah menghalangi unduhan.
+
 Dua jalur unduhan:
 
 | Jalur | Kapan dipakai | Catatan |

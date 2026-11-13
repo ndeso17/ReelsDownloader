@@ -45,6 +45,16 @@ nama platform (Instagram/Facebook/YouTube) TIDAK diterjemahkan.
     <string name="home_bitrate_128">128 kbps</string>
     <string name="home_download">Download</string>
 
+    <!-- Preview before download (A18) -->
+    <string name="preview_loading">Reading video info…</string>
+    <string name="preview_unavailable">Preview unavailable — you can still download.</string>
+    <string name="preview_refresh">Refresh preview</string>
+    <string name="preview_size_estimate">≈ %1$s</string>
+    <string name="preview_size_unknown">size unknown</string>
+    <string name="preview_available">Available: %1$s</string>
+    <string name="preview_duration">Duration %1$s</string>
+    <string name="preview_play">Watch before downloading</string>
+
     <!-- Job states -->
     <string name="job_queued">Queued</string>
     <string name="job_downloading">Downloading %1$d%%</string>

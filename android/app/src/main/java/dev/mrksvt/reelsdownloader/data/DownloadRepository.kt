@@ -32,6 +32,7 @@ class DownloadRepository(
      * @param mediaUrl URL media langsung bila sudah diketahui (mis. dari browser
      *   mini) — dipakai engine cadangan tanpa perlu menebak dari halaman.
      * @param mimeType MIME hasil deteksi, untuk menentukan jenis simpanan.
+     * @param title judul dari pratinjau (A18), supaya riwayat langsung terbaca.
      */
     suspend fun start(
         url: String,
@@ -42,6 +43,7 @@ class DownloadRepository(
         engine: EngineKind = EngineKind.AUTO,
         mediaUrl: String? = null,
         mimeType: String? = null,
+        title: String? = null,
     ): String {
         val jobId = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
@@ -55,6 +57,7 @@ class DownloadRepository(
             status = JobStatus.QUEUED.name,
             createdAt = now,
             updatedAt = now,
+            title = title,
             mediaUrl = mediaUrl,
             mimeType = mimeType,
             // AUTO tidak disimpan apa adanya: worker mengisi engine yang

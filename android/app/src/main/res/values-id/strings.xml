@@ -36,6 +36,16 @@ Nama platform (Instagram/Facebook/YouTube) dan emoji tidak diterjemahkan.
     <string name="home_bitrate_128">128 kbps</string>
     <string name="home_download">Unduh</string>
 
+    <!-- Pratinjau sebelum unduh (A18) -->
+    <string name="preview_loading">Membaca info video…</string>
+    <string name="preview_unavailable">Pratinjau tidak tersedia — unduhan tetap bisa dilakukan.</string>
+    <string name="preview_refresh">Muat ulang pratinjau</string>
+    <string name="preview_size_estimate">≈ %1$s</string>
+    <string name="preview_size_unknown">ukuran tidak diketahui</string>
+    <string name="preview_available">Tersedia: %1$s</string>
+    <string name="preview_duration">Durasi %1$s</string>
+    <string name="preview_play">Tonton sebelum mengunduh</string>
+
     <!-- Asal unduhan bila bukan lewat yt-dlp (A17). -->
     <string name="engine_via_browser">lewat browser</string>
     <string name="engine_via_direct">langsung</string>

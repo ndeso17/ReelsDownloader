@@ -33,6 +33,19 @@ class UrlValidatorTest {
     )
 
     @Test
+    fun `hanya url yang menunjuk konten yang diprobe`() {
+        // Semua URL valid di atas menunjuk konten.
+        validUrls.forEach { (url, _) ->
+            assertTrue("harus punya konten: $url", UrlValidator.pointsToContent(url))
+        }
+        // Beranda platform lolos validasi, tetapi bukan media.
+        assertTrue(!UrlValidator.pointsToContent("https://www.instagram.com"))
+        assertTrue(!UrlValidator.pointsToContent("https://www.instagram.com/"))
+        assertTrue(!UrlValidator.pointsToContent("https://youtube.com"))
+        assertTrue(!UrlValidator.pointsToContent("bukan url"))
+    }
+
+    @Test
     fun `accepts the 10 allowed hosts`() {
         validUrls.forEach { (url, expected) ->
             val result = UrlValidator.validate(url)

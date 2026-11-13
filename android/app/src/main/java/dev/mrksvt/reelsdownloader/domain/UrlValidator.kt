@@ -82,9 +82,19 @@ object UrlValidator {
         }
     }
 
+    /**
+     * URL menunjuk konten tertentu, bukan sekadar beranda platform.
+     *
+     * Dipakai pratinjau (A18): mengetik `https://www.instagram.com` sudah lolos
+     * [validate], tetapi memprobe beranda hanya membuang satu proses yt-dlp.
+     */
+    fun pointsToContent(url: String): Boolean {
+        val path = runCatching { URI(url).path }.getOrNull().orEmpty().trim('/')
+        return path.isNotEmpty()
+    }
+
     /** Deteksi platform dari hostname (FR-103). */
-    fun detectPlatform(host: String): Platform? = when (host.lowercase(Locale.ROOT)) {
-        "instagram.com", "www.instagram.com" -> Platform.INSTAGRAM
+    fun detectPlatform(host: String): Platform? = when (host.lowercase(Locale.ROOT)) {        "instagram.com", "www.instagram.com" -> Platform.INSTAGRAM
         "facebook.com", "www.facebook.com", "m.facebook.com", "fb.watch" -> Platform.FACEBOOK
         "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be" -> Platform.YOUTUBE
         else -> null

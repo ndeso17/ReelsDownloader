@@ -3,11 +3,16 @@ package dev.mrksvt.reelsdownloader.ui.screen
 import android.Manifest
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -27,6 +33,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -39,20 +46,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.mrksvt.reelsdownloader.R
 import dev.mrksvt.reelsdownloader.data.db.DownloadJobEntity
 import dev.mrksvt.reelsdownloader.domain.AudioBitrate
+import dev.mrksvt.reelsdownloader.domain.DownloadError
 import dev.mrksvt.reelsdownloader.domain.Quality
 import dev.mrksvt.reelsdownloader.domain.ResultType
 import dev.mrksvt.reelsdownloader.domain.UrlValidator
+import dev.mrksvt.reelsdownloader.domain.formatDuration
 import dev.mrksvt.reelsdownloader.ui.components.JobCard
+import dev.mrksvt.reelsdownloader.ui.components.RemoteThumbnail
 import dev.mrksvt.reelsdownloader.ui.vm.HomeUiState
 import dev.mrksvt.reelsdownloader.ui.vm.HomeViewModel
 import dev.mrksvt.reelsdownloader.ui.icons.AppIcons
@@ -81,6 +93,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { UrlInputCard(state, viewModel, context) }
+        item { PreviewCard(state, viewModel) }
         item { TypeAndQualityCard(state, viewModel) }
 
         if (activeJobs.isNotEmpty()) {
@@ -237,8 +250,167 @@ private fun UrlInputCard(
 }
 
 @Composable
-private fun TypeAndQualityCard(state: HomeUiState, viewModel: HomeViewModel) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+private fun PreviewCard(state: HomeUiState, viewModel: HomeViewModel) {
+    val preview = state.preview
+    // Tidak ada apa pun untuk ditampilkan dan tidak ada yang dimuat: kartu
+    // pratinjau tidak boleh menjadi ruang kosong di layar.
+    if (preview == null && !state.previewLoading && state.previewError == null) return
+
+    val context = LocalContext.current
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            when {
+                state.previewLoading && preview == null -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = stringResource(R.string.preview_loading),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                preview == null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        // Sebagian kegagalan memang layak diketahui lebih awal
+                        // (video privat, tautan mati); sisanya cukup pesan umum.
+                        text = stringResource(
+                            when (state.previewError) {
+                                DownloadError.Private,
+                                DownloadError.NotFound,
+                                DownloadError.UnsupportedUrl,
+                                DownloadError.InvalidUrl,
+                                -> state.previewError.messageRes
+
+                                else -> R.string.preview_unavailable
+                            }
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = viewModel::refreshPreview) {
+                        Text(stringResource(R.string.preview_refresh))
+                    }
+                }
+
+                else -> PreviewContent(state = state, preview = preview, context = context)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewContent(
+    state: HomeUiState,
+    preview: dev.mrksvt.reelsdownloader.domain.MediaPreview,
+    context: Context,
+) {
+    Row {
+        Box {
+            RemoteThumbnail(
+                url = preview.thumbnailUrl,
+                modifier = Modifier.size(width = 96.dp, height = 72.dp),
+                contentDescription = preview.title,
+            )
+            // Menonton dulu sebelum mengunduh: pratinjau yang sebenarnya.
+            // Dibuka lewat aplikasi lain supaya tidak perlu memutar video di
+            // dalam aplikasi ini (tidak ada player tambahan di APK).
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable { openExternally(context, preview.url) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = AppIcons.PlayArrow,
+                    contentDescription = stringResource(R.string.preview_play),
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(30.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.45f),
+                            shape = CircleShape,
+                        )
+                        .padding(5.dp),
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = preview.title ?: preview.url,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            preview.uploader?.let { uploader ->
+                Text(
+                    text = uploader,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = buildString {
+                    preview.durationSeconds?.let {
+                        append(context.getString(R.string.preview_duration, formatDuration(it)))
+                    }
+                    val estimate = preview.estimateBytes(state.type, state.quality)
+                    if (isNotEmpty()) append(" · ")
+                    append(
+                        if (estimate != null) {
+                            context.getString(
+                                R.string.preview_size_estimate,
+                                Formatter.formatShortFileSize(context, estimate),
+                            )
+                        } else {
+                            context.getString(R.string.preview_size_unknown)
+                        }
+                    )
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    // Resolusi yang benar-benar tersedia — inilah yang membedakan "pilih 720p"
+    // dari "720p memang ada di video ini".
+    if (preview.heights.isNotEmpty()) {
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(
+                R.string.preview_available,
+                preview.heights.joinToString(" · ") { "${it}p" },
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    if (state.previewLoading) {
+        Spacer(Modifier.height(6.dp))
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    }
+}
+
+@Composable
+private fun TypeAndQualityCard(state: HomeUiState, viewModel: HomeViewModel) {    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = stringResource(R.string.home_type_label),
@@ -319,4 +491,16 @@ private fun ActiveJobCard(job: DownloadJobEntity, viewModel: HomeViewModel) {
         job = job,
         onCancel = { viewModel.cancel(job.id) },
     )
+}
+
+/**
+ * Buka [url] di aplikasi lain (browser/aplikasi platform).
+ *
+ * Dipakai tombol putar pada pratinjau: menonton dulu sebelum mengunduh.
+ * Kegagalan (tidak ada aplikasi yang bisa menangani) diabaikan — ini hanya
+ * aksi tambahan, bukan jalan utama.
+ */
+private fun openExternally(context: Context, url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    runCatching { context.startActivity(Intent.createChooser(intent, null)) }
 }

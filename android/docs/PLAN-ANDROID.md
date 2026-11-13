@@ -61,6 +61,7 @@ menulis dokumen rencana.
 | A15 | CI | GitHub Actions: `./gradlew test`, cache Gradle, build debug APK pada PR | Workflow hijau | A1 |
 | A16 | Dokumentasi | `android/README.md` (instalasi APK, izin, troubleshooting, cara rilis), update `README.md` root | Review manusia | A14 |
 | A17 | Engine cadangan | `EngineRouter` (AUTO → yt-dlp → cadangan), `DirectHttpEngine` (HTTP dengan resume/retry), `Remux` (HLS via FFmpeg bawaan), browser mini WebView + `MediaSniffer`, migrasi Room v1→v2 non-destruktif. Rincian: [`PLAN-BACKUP-ENGINE.md`](PLAN-BACKUP-ENGINE.md) | JUnit (`EngineRouterTest` 13, `MediaSnifferTest` 14, `MigrationTest` 6) + manual di HP | A4, A6 |
+| A18 | Pratinjau sebelum unduh | `MetadataProbe` (bungkus `getInfo`, terpisah dari jalur unduhan), `MediaPreview` + `PreviewAssembler` (perkiraan ukuran murni), `RemoteImageLoader`/`RemoteThumbnail` (tanpa pustaka gambar baru), kartu pratinjau di Home (judul, pengunggah, durasi, resolusi tersedia, perkiraan ukuran, thumbnail, tombol tonton) | JUnit (`MediaPreviewTest` 17, `UrlValidatorTest` 7) + manual di HP | A4, A8 |
 
 Urutan eksekusi: **A0 → A1 → A2 ∥ A3 → A4 → A5 ∥ A6 → A7 → A8 ∥ A10 → A9 → A11 → A12 → A13 → A15 → A14 → A16.**
 
@@ -78,6 +79,7 @@ Urutan eksekusi: **A0 → A1 → A2 ∥ A3 → A4 → A5 ∥ A6 → A7 → A8 �
 | A15 | Belum | `.github/` masih di-`.gitignore` (lihat B1) |
 | A16 | **Sebagian** | `android/docs/` lengkap; `README.md` root sudah menunjuk dokumen ini |
 | A17 | **Selesai (kode)** | Engine cadangan + browser mini; 49 test hijau (`MigrationTest` 6, `EngineRouterTest` 13, `MediaSnifferTest` 14, `UrlValidatorTest` 6, `AppIconsTest` 3, `HistorySelectionTest` 7). Sisa: uji unduhan nyata di HP |
+| A18 | **Selesai (kode)** | Kartu pratinjau di Home (judul, pengunggah, durasi, resolusi nyata, perkiraan ukuran, thumbnail, tombol tonton) sebelum tombol Unduh ditekan. 67 test hijau (`MediaPreviewTest` 17, `UrlValidatorTest` 7, sisanya A17). APK 0.1.8: debug 66 MB, release 54 MB. Sisa: verifikasi tampilan di HP |
 
 ---
 

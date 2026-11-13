@@ -8,6 +8,7 @@ import dev.mrksvt.reelsdownloader.data.db.AppDatabase
 import dev.mrksvt.reelsdownloader.data.engine.DirectHttpEngine
 import dev.mrksvt.reelsdownloader.data.engine.DownloadEngine
 import dev.mrksvt.reelsdownloader.data.engine.EngineRouter
+import dev.mrksvt.reelsdownloader.data.engine.MetadataProbe
 import dev.mrksvt.reelsdownloader.data.engine.YtDlpEngine
 import dev.mrksvt.reelsdownloader.util.CrashReporter
 import dev.mrksvt.reelsdownloader.worker.DownloadNotifications
@@ -31,6 +32,9 @@ class AppContainer(private val app: Application) {
     val directEngine: DownloadEngine by lazy { DirectHttpEngine(app) }
 
     val engineRouter: EngineRouter by lazy { EngineRouter(engine, directEngine) }
+
+    /** Pengintip metadata untuk pratinjau sebelum unduh (A18). */
+    val metadataProbe: MetadataProbe by lazy { MetadataProbe(engine) }
 
     val mediaStoreWriter: MediaStoreWriter by lazy { MediaStoreWriter(app) }
 
