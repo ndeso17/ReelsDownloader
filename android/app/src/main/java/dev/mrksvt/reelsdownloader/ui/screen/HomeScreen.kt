@@ -149,8 +149,16 @@ private fun UrlInputCard(
                 ),
                 trailingIcon = {
                     TextButton(onClick = {
-                        val clipboard = context.getSystemService(ClipboardManager::class.java)
-                        viewModel.onPaste(clipboard?.primaryClip?.getItemAt(0)?.text?.toString())
+                        // `getItemAt(0)` melempar IndexOutOfBounds bila clip
+                        // kosong/merah (mis. isi dari pengelola sandi), jadi
+                        // jumlah item diperiksa lebih dulu.
+                        val text = runCatching {
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            val clip = clipboard?.primaryClip
+                            if (clip == null || clip.itemCount == 0) null
+                            else clip.getItemAt(0)?.text?.toString()
+                        }.getOrNull()
+                        viewModel.onPaste(text)
                     }) {
                         Icon(AppIcons.ContentPaste, contentDescription = null, Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
@@ -253,8 +261,14 @@ private fun UrlInputCard(
 private fun PreviewCard(state: HomeUiState, viewModel: HomeViewModel) {
     val preview = state.preview
     // Tidak ada apa pun untuk ditampilkan dan tidak ada yang dimuat: kartu
-    // pratinjau tidak boleh menjadi ruang kosong di layar.
-    if (preview == null && !state.previewLoading && state.previewError == null) return
+    // pratinjau tidak boleh menjadi ruang kosong di layar. Pengecualian:
+    // pratinjau yang dimatikan penjaga crash harus terlihat agar pengguna tahu
+    // cara menyalakannya lagi.
+    if (preview == null && !state.previewLoading && state.previewError == null &&
+        !state.previewDisabled
+    ) {
+        return
+    }
 
     val context = LocalContext.current
 
@@ -286,22 +300,36 @@ private fun PreviewCard(state: HomeUiState, viewModel: HomeViewModel) {
                         // Sebagian kegagalan memang layak diketahui lebih awal
                         // (video privat, tautan mati); sisanya cukup pesan umum.
                         text = stringResource(
-                            when (state.previewError) {
-                                DownloadError.Private,
-                                DownloadError.NotFound,
-                                DownloadError.UnsupportedUrl,
-                                DownloadError.InvalidUrl,
-                                -> state.previewError.messageRes
+                            if (state.previewDisabled) {
+                                R.string.preview_disabled
+                            } else {
+                                when (state.previewError) {
+                                    DownloadError.Private,
+                                    DownloadError.NotFound,
+                                    DownloadError.UnsupportedUrl,
+                                    DownloadError.InvalidUrl,
+                                    -> state.previewError.messageRes
 
-                                else -> R.string.preview_unavailable
+                                    else -> R.string.preview_unavailable
+                                }
                             }
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = viewModel::refreshPreview) {
-                        Text(stringResource(R.string.preview_refresh))
+                    TextButton(
+                        onClick = {
+                            if (state.previewDisabled) viewModel.enablePreview()
+                            else viewModel.refreshPreview()
+                        },
+                    ) {
+                        Text(
+                            stringResource(
+                                if (state.previewDisabled) R.string.preview_enable
+                                else R.string.preview_refresh
+                            )
+                        )
                     }
                 }
 

@@ -5,7 +5,6 @@ import android.util.Log
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
-import dev.mrksvt.reelsdownloader.BuildConfig
 import dev.mrksvt.reelsdownloader.domain.DownloadError
 import dev.mrksvt.reelsdownloader.domain.ResultType
 import dev.mrksvt.reelsdownloader.util.CrashReporter
@@ -53,7 +52,7 @@ class YtDlpEngine(
     }
 
     private fun stage(name: String) {
-        if (BuildConfig.DEBUG) CrashReporter.stage(appContext, name)
+        CrashReporter.stage(appContext, name)
     }
 
     /**

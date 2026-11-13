@@ -45,6 +45,8 @@ Nama platform (Instagram/Facebook/YouTube) dan emoji tidak diterjemahkan.
     <string name="preview_available">Tersedia: %1$s</string>
     <string name="preview_duration">Durasi %1$s</string>
     <string name="preview_play">Tonton sebelum mengunduh</string>
+    <string name="preview_disabled">Pratinjau dimatikan karena sebelumnya membuat aplikasi tertutup. Unduhan tetap bisa.</string>
+    <string name="preview_enable">Nyalakan</string>
 
     <!-- Asal unduhan bila bukan lewat yt-dlp (A17). -->
     <string name="engine_via_browser">lewat browser</string>

@@ -25,8 +25,8 @@ android {
         applicationId = "dev.mrksvt.reelsdownloader"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.1.8"
+        versionCode = 10
+        versionName = "0.1.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -136,6 +136,10 @@ dependencies {
 
     implementation(libs.youtubedl.android)
     implementation(libs.youtubedl.ffmpeg)
+    // Dipakai MetadataProbe untuk membaca output `--dump-json`. Pustaka
+    // youtubedl-android membawanya sebagai dependensi transitif (tidak terlihat
+    // saat kompilasi), jadi dideklarasikan sendiri dengan versi yang sama.
+    implementation(libs.jackson.databind)
 
     ksp(libs.androidx.room.compiler)
 

@@ -11,6 +11,7 @@ import dev.mrksvt.reelsdownloader.data.engine.EngineRouter
 import dev.mrksvt.reelsdownloader.data.engine.MetadataProbe
 import dev.mrksvt.reelsdownloader.data.engine.YtDlpEngine
 import dev.mrksvt.reelsdownloader.util.CrashReporter
+import dev.mrksvt.reelsdownloader.util.PreviewGuard
 import dev.mrksvt.reelsdownloader.worker.DownloadNotifications
 import kotlinx.coroutines.sync.Semaphore
 
@@ -34,7 +35,7 @@ class AppContainer(private val app: Application) {
     val engineRouter: EngineRouter by lazy { EngineRouter(engine, directEngine) }
 
     /** Pengintip metadata untuk pratinjau sebelum unduh (A18). */
-    val metadataProbe: MetadataProbe by lazy { MetadataProbe(engine) }
+    val metadataProbe: MetadataProbe by lazy { MetadataProbe(app, engine) }
 
     val mediaStoreWriter: MediaStoreWriter by lazy { MediaStoreWriter(app) }
 
@@ -47,17 +48,15 @@ class AppContainer(private val app: Application) {
 
     fun warmUp() {
         DownloadNotifications.ensureChannel(app)
-        if (BuildConfig.DEBUG) CrashReporter.stage(app, "app:onCreate")
+        CrashReporter.stage(app, "app:onCreate")
         // Aplikasi di background → engine boleh menyiapkan runtime python.
         Thread {
             runCatching {
-                if (BuildConfig.DEBUG) CrashReporter.stage(app, "engine:warmup-start")
+                CrashReporter.stage(app, "engine:warmup-start")
                 kotlinx.coroutines.runBlocking { engine.prepare() }
-                if (BuildConfig.DEBUG) CrashReporter.stage(app, "engine:warmup-ok")
+                CrashReporter.stage(app, "engine:warmup-ok")
             }.onFailure {
-                if (BuildConfig.DEBUG) {
-                    CrashReporter.stage(app, "engine:warmup-fail ${it::class.java.simpleName}: ${it.message}")
-                }
+                CrashReporter.stage(app, "engine:warmup-fail ${it::class.java.simpleName}: ${it.message}")
             }
         }.apply { isDaemon = true }.start()
     }
@@ -75,10 +74,13 @@ class ReelsDownloaderApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        if (BuildConfig.DEBUG) {
-            CrashReporter.install(this)
-            CrashReporter.dumpOnStart(this)
-        }
+        // Dipasang di semua build: build release adalah satu-satunya yang
+        // terpasang di HP, jadi tanpa ini laporan crash tidak pernah ada.
+        // Isinya hanya nama tahap dan stack trace — tidak ada data pengguna.
+        CrashReporter.install(this)
+        CrashReporter.dumpOnStart(this)
+        // Kalau sesi sebelumnya mati saat pratinjau berjalan, jangan ulangi.
+        PreviewGuard.checkAfterRestart(this)
         container.warmUp()
     }
 }

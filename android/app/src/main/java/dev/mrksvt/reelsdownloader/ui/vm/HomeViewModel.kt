@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.mrksvt.reelsdownloader.ReelsDownloaderApp
-import dev.mrksvt.reelsdownloader.BuildConfig
 import dev.mrksvt.reelsdownloader.data.AppSettings
 import dev.mrksvt.reelsdownloader.data.engine.EngineException
 import dev.mrksvt.reelsdownloader.domain.AudioBitrate
@@ -15,6 +14,7 @@ import dev.mrksvt.reelsdownloader.domain.Quality
 import dev.mrksvt.reelsdownloader.domain.ResultType
 import dev.mrksvt.reelsdownloader.domain.UrlValidator
 import dev.mrksvt.reelsdownloader.util.CrashReporter
+import dev.mrksvt.reelsdownloader.util.PreviewGuard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,6 +41,11 @@ data class HomeUiState(
     val previewLoading: Boolean = false,
     /** Kegagalan pratinjau; tidak menghalangi unduhan. */
     val previewError: DownloadError? = null,
+    /**
+     * Pratinjau otomatis dimatikan karena sebelumnya membuat aplikasi
+     * tertutup (lihat `PreviewGuard`). Unduhan tidak terpengaruh.
+     */
+    val previewDisabled: Boolean = false,
 )
 
 enum class HomeHint { CLIPBOARD_EMPTY, SHARE_RECEIVED }
@@ -83,6 +88,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+        // Pratinjau yang membuat aplikasi tertutup tidak boleh diulang diam-diam
+        // pada setiap URL berikutnya.
+        _state.update {
+            it.copy(previewDisabled = !PreviewGuard.isAutoPreviewEnabled(getApplication()))
+        }
     }
 
     fun onUrlChanged(value: String) {
@@ -101,6 +111,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             cancelPreview()
         }
     }
+
     fun onPaste(text: String?) {
         val extracted = UrlValidator.extractUrl(text)
         if (extracted == null) {
@@ -171,9 +182,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Nyalakan lagi pratinjau otomatis yang dimatikan penjaga crash. */
+    fun enablePreview() {
+        PreviewGuard.enableAutoPreview(getApplication())
+        _state.update { it.copy(previewDisabled = false) }
+        val validation = UrlValidator.validate(_state.value.url)
+        if (validation is UrlValidator.ValidationResult.Valid) {
+            requestPreview(validation.url, debounce = false)
+        }
+    }
+
     fun submit() {
         val current = _state.value
-        if (BuildConfig.DEBUG) CrashReporter.stage(getApplication(), "ui:submit-tapped")
+        CrashReporter.stage(getApplication(), "ui:submit-tapped")
         val validation = UrlValidator.validate(current.url)
         when (validation) {
             is UrlValidator.ValidationResult.Valid -> {
@@ -229,6 +250,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * membentuk URL valid akan memulai proses yt-dlp baru.
      */
     private fun requestPreview(url: String, debounce: Boolean) {
+        // Pratinjau dimatikan setelah sebelumnya membuat aplikasi tertutup.
+        if (_state.value.previewDisabled) return
         // Beranda platform bukan media: jangan buang satu proses yt-dlp.
         if (!UrlValidator.pointsToContent(url)) {
             cancelPreview()
@@ -237,6 +260,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (url == previewedUrl && _state.value.preview != null) return
 
         previewJob?.cancel()
+        // Membatalkan coroutine tidak menghentikan `execute` yang sedang
+        // memblokir thread, jadi proses python-nya dimatikan terpisah.
+        probe.cancelCurrent()
         // URL berbeda → pratinjau lama tidak relevan lagi; jangan biarkan
         // kartu menampilkan video yang salah selama probe berjalan.
         if (previewedUrl != url) {
@@ -256,6 +282,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             _state.update { it.copy(previewLoading = true, previewError = null) }
+            PreviewGuard.beginProbe(getApplication())
             val result = try {
                 withTimeoutOrNull(PREVIEW_TIMEOUT_MS) { probe.probe(url) }
             } catch (cancelled: CancellationException) {
@@ -268,11 +295,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _state.update { it.copy(previewLoading = false, previewError = error.error) }
                 return@launch
+            } catch (error: Throwable) {
+                // Jaring pengaman: pratinjau adalah fitur tambahan, jadi
+                // kegagalannya tidak boleh menutup aplikasi. Catat supaya
+                // penyebabnya bisa diperiksa lewat reels-crashlog.txt.
+                CrashReporter.recordFailure(getApplication(), "PREVIEW", error)
+                _state.update {
+                    it.copy(previewLoading = false, previewError = DownloadError.DownloadFailed)
+                }
+                return@launch
+            } finally {
+                // Bila proses mati mendadak (crash native atau dibunuh sistem),
+                // baris ini tidak pernah berjalan — itulah sinyal yang dipakai
+                // PreviewGuard saat aplikasi dibuka lagi.
+                PreviewGuard.endProbe(getApplication())
             }
 
             if (result == null) {
-                // Lewat batas waktu: proses native tidak bisa dihentikan paksa,
-                // jadi cukup berhenti menunggu dan beri tahu pengguna.
+                // Lewat batas waktu: hentikan proses python-nya, bukan hanya
+                // berhenti menunggu. Proses yang dibiarkan hidup akan menumpuk
+                // sampai sistem membunuh aplikasi karena kehabisan memori.
+                probe.cancelCurrent()
                 _state.update {
                     it.copy(previewLoading = false, previewError = DownloadError.DownloadFailed)
                 }
@@ -290,6 +333,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun cancelPreview() {
         previewJob?.cancel()
         previewJob = null
+        probe.cancelCurrent()
         previewedUrl = null
         _state.update {
             it.copy(preview = null, previewLoading = false, previewError = null)

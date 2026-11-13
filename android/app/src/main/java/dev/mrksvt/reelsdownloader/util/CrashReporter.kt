@@ -14,7 +14,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Perekam crash untuk build debug.
+ * Perekam crash untuk build yang dipasang manual.
  *
  * Tiga sumber data:
  * 1. `Thread.setDefaultUncaughtExceptionHandler` - exception Java yang tidak
@@ -26,7 +26,11 @@ import java.util.Locale
  *    tahu di mana proses berhenti bila mati mendadak.
  *
  * Laporan ditulis ke `Download/reels-crashlog.txt` lewat MediaStore agar bisa
- * dibaca tanpa adb. Tidak pernah menulis apa pun di build release.
+ * dibaca tanpa adb. Dipasang di **semua** build: APK release adalah satu-satunya
+ * yang terpasang di HP pengguna, dan tanpa laporan dari build itu setiap crash
+ * hanya terlihat sebagai "aplikasi berhenti" tanpa petunjuk. Isi laporan hanya
+ * diagnostik (tahap terakhir, stack trace, info perangkat) — tidak ada isi
+ * unduhan, URL, atau data pribadi.
  */
 object CrashReporter {
 
@@ -34,6 +38,9 @@ object CrashReporter {
     private const val TRACE_FILE = "stage-trace.txt"
     private const val REPORT_NAME = "reels-crashlog.txt"
     private const val MAX_TRACE_LINES = 400
+
+    /** Batas umur catatan crash agar tidak mematikan pratinjau selamanya. */
+    private const val RECENT_EXIT_MS = 10 * 60 * 1000L
 
     fun install(context: Context) {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
@@ -68,12 +75,17 @@ object CrashReporter {
 
     /**
      * Dipanggil saat app dibuka. Menulis laporan bila ada jejak crash/exit
-     * dari proses sebelumnya.
+     * bermasalah dari proses sebelumnya.
      */
     fun dumpOnStart(context: Context) {
         val trace = readTrace(context)
         val exits = exitInfo(context)
-        if (trace.isBlank() && exits.isBlank()) return
+        if (exits.isBlank()) {
+            // Tidak ada yang perlu dilaporkan. Bersihkan jejak supaya laporan
+            // berikutnya hanya memuat sesi yang benar-benar bermasalah.
+            runCatching { File(context.filesDir, TRACE_FILE).writeText("") }
+            return
+        }
 
         val report = buildString {
             appendLine("=== STARTUP REPORT ${timestamp()} ===")
@@ -151,11 +163,55 @@ object CrashReporter {
         File(context.filesDir, TRACE_FILE).readText().takeLast(32_000)
     }.getOrDefault("")
 
+    /** Apakah ada catatan proses keluar bermasalah yang masih relevan. */
+    fun hasRecentProblemExit(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        val manager = context.getSystemService(ActivityManager::class.java) ?: return false
+        val problemReasons = setOf(
+            ApplicationExitInfo.REASON_CRASH,
+            ApplicationExitInfo.REASON_CRASH_NATIVE,
+            ApplicationExitInfo.REASON_ANR,
+            ApplicationExitInfo.REASON_LOW_MEMORY,
+            ApplicationExitInfo.REASON_SIGNALED,
+            ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE,
+        )
+        return runCatching {
+            manager.getHistoricalProcessExitReasons(context.packageName, 0, 5)
+                .any {
+                    it.reason in problemReasons &&
+                        // Hanya kejadian baru; catatan lama tidak boleh
+                        // mematikan pratinjau selamanya.
+                        System.currentTimeMillis() - it.timestamp < RECENT_EXIT_MS
+                }
+        }.onFailure { Log.w(TAG, "exit info gagal dibaca", it) }
+            .getOrDefault(false)
+    }
+
+    /**
+     * Riwayat proses mati yang **bermasalah** saja.
+     *
+     * `getHistoricalProcessExitReasons` selalu berisi entri (setiap kali
+     * aplikasi ditutup pengguna pun tercatat), jadi tanpa penyaringan laporan
+     * akan ditulis setiap kali aplikasi dibuka.
+     */
     private fun exitInfo(context: Context): String {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return ""
         val manager = context.getSystemService(ActivityManager::class.java) ?: return ""
+        // Konstanta REASON_* baru ada di API 30, jadi disusun setelah guard di
+        // atas; menyimpannya sebagai properti objek akan crash di Android 8-10.
+        val problemReasons = setOf(
+            ApplicationExitInfo.REASON_CRASH,
+            ApplicationExitInfo.REASON_CRASH_NATIVE,
+            ApplicationExitInfo.REASON_ANR,
+            ApplicationExitInfo.REASON_SIGNALED,
+            ApplicationExitInfo.REASON_LOW_MEMORY,
+            ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE,
+            ApplicationExitInfo.REASON_INITIALIZATION_FAILURE,
+        )
         return runCatching {
-            manager.getHistoricalProcessExitReasons(context.packageName, 0, 5)
+            manager.getHistoricalProcessExitReasons(context.packageName, 0, 10)
+                .filter { it.reason in problemReasons }
+                .take(5)
                 .joinToString("\n\n") { describe(it) }
         }.onFailure { Log.w(TAG, "exit info gagal dibaca", it) }
             .getOrDefault("")

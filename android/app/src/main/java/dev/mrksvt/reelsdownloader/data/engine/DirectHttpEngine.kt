@@ -2,7 +2,6 @@ package dev.mrksvt.reelsdownloader.data.engine
 
 import android.content.Context
 import android.util.Log
-import dev.mrksvt.reelsdownloader.BuildConfig
 import dev.mrksvt.reelsdownloader.domain.DownloadError
 import dev.mrksvt.reelsdownloader.domain.MediaSniffer
 import dev.mrksvt.reelsdownloader.util.CrashReporter
@@ -328,7 +327,7 @@ class DirectHttpEngine(
     }
 
     private fun stage(name: String) {
-        if (BuildConfig.DEBUG) CrashReporter.stage(appContext, name)
+        CrashReporter.stage(appContext, name)
     }
 
     private companion object {

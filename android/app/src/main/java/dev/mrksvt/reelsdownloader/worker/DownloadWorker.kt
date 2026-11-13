@@ -10,7 +10,6 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dev.mrksvt.reelsdownloader.ReelsDownloaderApp
-import dev.mrksvt.reelsdownloader.BuildConfig
 import dev.mrksvt.reelsdownloader.data.MediaSaveException
 import dev.mrksvt.reelsdownloader.data.db.DownloadJobDao
 import dev.mrksvt.reelsdownloader.data.db.DownloadJobEntity
@@ -283,7 +282,7 @@ class DownloadWorker(
     }
 
     private fun stage(name: String) {
-        if (BuildConfig.DEBUG) CrashReporter.stage(applicationContext, name)
+        CrashReporter.stage(applicationContext, name)
     }
 
     private suspend fun markFinished(

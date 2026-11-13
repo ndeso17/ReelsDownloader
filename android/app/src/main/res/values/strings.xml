@@ -54,6 +54,8 @@ nama platform (Instagram/Facebook/YouTube) TIDAK diterjemahkan.
     <string name="preview_available">Available: %1$s</string>
     <string name="preview_duration">Duration %1$s</string>
     <string name="preview_play">Watch before downloading</string>
+    <string name="preview_disabled">Preview is off because it closed the app last time. Download still works.</string>
+    <string name="preview_enable">Turn on</string>
 
     <!-- Job states -->
     <string name="job_queued">Queued</string>
