@@ -75,6 +75,19 @@ Nama platform (Instagram/Facebook/YouTube) dan emoji tidak diterjemahkan.
     <string name="history_removed_failed">%1$d entri gagal dihapus</string>
     <string name="history_removed_all">%1$d entri dihapus</string>
     <string name="history_retried">Unduhan dimulai ulang</string>
+    <string name="history_switch_to_list">Ganti ke tampilan daftar</string>
+    <string name="history_switch_to_grid">Ganti ke tampilan kisi</string>
+    <string name="history_selected_count">%1$d dipilih</string>
+    <string name="history_select_all">Pilih semua</string>
+    <string name="history_deselect_all">Batalkan semua</string>
+    <string name="history_exit_selection">Keluar dari pilihan</string>
+    <string name="history_bulk_delete_history">Hapus riwayat</string>
+    <string name="history_bulk_delete_with_file">Hapus + file</string>
+    <string name="history_bulk_delete_history_confirm">Hapus %1$d entri dari riwayat? File unduhan tetap tersimpan di perangkat.</string>
+    <string name="history_bulk_delete_with_file_confirm">Hapus %1$d entri dari riwayat DAN hapus filenya dari perangkat? Tindakan ini tidak bisa dibatalkan.</string>
+    <string name="history_bulk_removed">%1$d entri dihapus</string>
+    <string name="history_bulk_removed_with_files">%1$d entri dan %2$d file dihapus</string>
+    <string name="history_select_hint">Tekan lama satu item untuk memilih beberapa</string>
 
     <!-- Notifikasi -->
     <string name="channel_download_name">Unduhan</string>

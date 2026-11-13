@@ -161,6 +161,62 @@ object AppIcons {
         )
     }
 
+    val GridView: ImageVector by lazy {
+        icon(
+            name = "GridView",
+            pathData =
+            "M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 " +
+            "20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 " +
+            "12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z",
+        )
+    }
+
+    val ViewList: ImageVector by lazy {
+        icon(
+            name = "ViewList",
+            pathData =
+            "M3 14h4v-4H3v4zm0 5h4v-4H3v4zM3 9h4V5H3v4zm5 5h13v-4H8v4zm0 5h13v-4H8v4zM8 5v4h13V5H8z",
+        )
+    }
+
+    val Close: ImageVector by lazy {
+        icon(
+            name = "Close",
+            pathData =
+            "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 " +
+            "17.59 13.41 12z",
+        )
+    }
+
+    val SelectAll: ImageVector by lazy {
+        icon(
+            name = "SelectAll",
+            pathData =
+            "M3 5h2V3c-1.1 0-2 .9-2 2zm0 8h2v-2H3v2zm4 8h2v-2H7v2zM3 9h2V7H3v2zm10-6h-2v2h2V3zm6 " +
+            "0v2h2c0-1.1-.9-2-2-2zM5 21v-2H3c0 1.1.9 2 2 2zm-2-4h2v-2H3v2zM9 3H7v2h2V3zm2 " +
+            "18h2v-2h-2v2zm8-8h2v-2h-2v2zm0 8c1.1 0 2-.9 2-2h-2v2zm0-12h2V7h-2v2zm0 8h2v-2h-2v2zm-4 " +
+            "4h2v-2h-2v2zm0-16h2V3h-2v2zM7 17h10V7H7v10zm2-8h6v6H9V9z",
+        )
+    }
+
+    val Check: ImageVector by lazy {
+        icon(
+            name = "Check",
+            pathData =
+            "M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z",
+        )
+    }
+
+    val CheckCircleOutline: ImageVector by lazy {
+        icon(
+            name = "CheckCircleOutline",
+            pathData =
+            "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 " +
+            "0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm4.59-12.42L10 14.17l-2.59-2.58L6 13l4 4 " +
+            "8-8z",
+        )
+    }
+
     /** Bangun [ImageVector] 24dp dari data path SVG. */
     private fun icon(name: String, pathData: String): ImageVector = ImageVector.Builder(
         name = name,

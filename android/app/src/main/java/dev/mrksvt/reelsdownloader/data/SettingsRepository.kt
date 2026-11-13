@@ -23,6 +23,16 @@ enum class ThemeMode {
     }
 }
 
+/** Cara menampilkan riwayat: kisi galeri atau daftar ringkas. */
+enum class HistoryViewMode {
+    GRID, LIST;
+
+    companion object {
+        fun fromName(value: String?): HistoryViewMode =
+            entries.firstOrNull { it.name == value } ?: GRID
+    }
+}
+
 /** Preferensi yang dipakai Home + Settings (FR-117). */
 data class AppSettings(
     val defaultType: ResultType = ResultType.VIDEO,
@@ -30,6 +40,7 @@ data class AppSettings(
     val defaultBitrate: AudioBitrate = AudioBitrate.K320,
     val maxSizeMb: Int = DEFAULT_MAX_SIZE_MB,
     val theme: ThemeMode = ThemeMode.SYSTEM,
+    val historyView: HistoryViewMode = HistoryViewMode.GRID,
 ) {
     val maxSizeBytes: Long get() = maxSizeMb.toLong() * 1024L * 1024L
 
@@ -51,6 +62,7 @@ class SettingsRepository(private val appContext: Context) {
             defaultBitrate = AudioBitrate.fromName(prefs[KEY_BITRATE]),
             maxSizeMb = prefs[KEY_MAX_SIZE] ?: AppSettings.DEFAULT_MAX_SIZE_MB,
             theme = ThemeMode.fromName(prefs[KEY_THEME]),
+            historyView = HistoryViewMode.fromName(prefs[KEY_HISTORY_VIEW]),
         )
     }
 
@@ -75,11 +87,16 @@ class SettingsRepository(private val appContext: Context) {
         appContext.settingsDataStore.edit { it[KEY_THEME] = mode.name }
     }
 
+    suspend fun setHistoryView(mode: HistoryViewMode) {
+        appContext.settingsDataStore.edit { it[KEY_HISTORY_VIEW] = mode.name }
+    }
+
     private companion object {
         val KEY_TYPE = stringPreferencesKey("default_type")
         val KEY_QUALITY = stringPreferencesKey("default_quality")
         val KEY_BITRATE = stringPreferencesKey("default_bitrate")
         val KEY_MAX_SIZE = intPreferencesKey("max_size_mb")
         val KEY_THEME = stringPreferencesKey("theme")
+        val KEY_HISTORY_VIEW = stringPreferencesKey("history_view")
     }
 }

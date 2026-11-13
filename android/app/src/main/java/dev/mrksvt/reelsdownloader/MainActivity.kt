@@ -132,6 +132,16 @@ private fun AppScaffold(
 
             is HistoryEvent.RemovedAll -> context.getString(R.string.history_removed_all, event.count)
             HistoryEvent.Retried -> context.getString(R.string.history_retried)
+            is HistoryEvent.BulkRemoved ->
+                if (event.files > 0) {
+                    context.getString(
+                        R.string.history_bulk_removed_with_files,
+                        event.count,
+                        event.files,
+                    )
+                } else {
+                    context.getString(R.string.history_bulk_removed, event.count)
+                }
         }
         scope.launch {
             snackbarHostState.currentSnackbarData?.dismiss()

@@ -121,4 +121,23 @@ class DownloadRepository(
         )
         return true
     }
+
+    /**
+     * Hapus banyak entri sekaligus.
+     *
+     * @param withFile `true` menghapus berkas di galeri juga, `false` hanya
+     *   menghapus entri riwayat dan membiarkan berkas tetap ada.
+     * @return jumlah berkas yang benar-benar terhapus (0 bila [withFile] false).
+     */
+    suspend fun deleteMany(jobs: List<DownloadJobEntity>, withFile: Boolean): Int {
+        var filesRemoved = 0
+        jobs.forEach { job ->
+            if (withFile) {
+                val uri = job.uri?.let { runCatching { Uri.parse(it) }.getOrNull() }
+                if (mediaStoreWriter.delete(uri, job.filePath)) filesRemoved++
+            }
+            dao.deleteById(job.id)
+        }
+        return filesRemoved
+    }
 }

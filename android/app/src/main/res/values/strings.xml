@@ -81,6 +81,19 @@ nama platform (Instagram/Facebook/YouTube) TIDAK diterjemahkan.
     <string name="history_removed_failed">%1$d failed entries removed</string>
     <string name="history_removed_all">%1$d entries removed</string>
     <string name="history_retried">Download restarted</string>
+    <string name="history_switch_to_list">Switch to list view</string>
+    <string name="history_switch_to_grid">Switch to grid view</string>
+    <string name="history_selected_count">%1$d selected</string>
+    <string name="history_select_all">Select all</string>
+    <string name="history_deselect_all">Deselect all</string>
+    <string name="history_exit_selection">Exit selection</string>
+    <string name="history_bulk_delete_history">Delete history</string>
+    <string name="history_bulk_delete_with_file">Delete + file</string>
+    <string name="history_bulk_delete_history_confirm">Remove %1$d entries from history? The downloaded files stay on your device.</string>
+    <string name="history_bulk_delete_with_file_confirm">Remove %1$d entries from history AND delete their files from your device? This cannot be undone.</string>
+    <string name="history_bulk_removed">%1$d entries removed</string>
+    <string name="history_bulk_removed_with_files">%1$d entries and %2$d files removed</string>
+    <string name="history_select_hint">Long-press an item to select multiple</string>
 
     <!-- Notifications -->
     <string name="channel_download_name">Downloads</string>
