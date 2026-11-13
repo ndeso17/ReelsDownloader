@@ -44,7 +44,10 @@ object PreviewGuard {
         // Jejak lama dibersihkan; kalau prosesnya hanya ditutup pengguna,
         // pratinjau tetap boleh berjalan seperti biasa.
         endProbe(context)
-        if (!CrashReporter.hasRecentProblemExit(context)) return false
+        if (!CrashReporter.hasRecentProblemExit(context)) {
+            CrashReporter.stage(context, "preview:probe-inflight-but-exit-clean")
+            return false
+        }
         prefs(context).edit().putBoolean(KEY_DISABLED, true).apply()
         CrashReporter.stage(context, "preview:disabled-after-crash")
         return true

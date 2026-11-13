@@ -15,6 +15,7 @@ import dev.mrksvt.reelsdownloader.util.CrashReporter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -94,6 +95,10 @@ class MetadataProbe(
             throw cancelled
         } catch (engineError: EngineException) {
             stage("preview:probe-fail ${engineError.error}")
+            // Bila coroutine sudah dibatalkan (URL berganti atau batas waktu
+            // ViewModel), lempar CancellationException — bukan exception biasa
+            // dari coroutine yang sudah mati.
+            currentCoroutineContext().ensureActive()
             throw engineError
         } catch (error: Throwable) {
             // Jaring pengaman terakhir. Jangan pernah melempar apa pun selain
@@ -101,11 +106,13 @@ class MetadataProbe(
             // exception yang lolos berarti aplikasi tertutup.
             stage("preview:probe-crash ${error::class.java.simpleName}")
             Log.e(TAG, "probe tidak terduga: $url", error)
-            throw EngineException(
+            val wrapped = EngineException(
                 DownloadError.fromEngineMessage(error.message),
                 error.message,
                 error,
             )
+            currentCoroutineContext().ensureActive()
+            throw wrapped
         } finally {
             if (processId == id) processId = null
         }
