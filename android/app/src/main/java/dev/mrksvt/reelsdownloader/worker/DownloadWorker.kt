@@ -18,6 +18,7 @@ import dev.mrksvt.reelsdownloader.data.engine.DownloadEvent
 import dev.mrksvt.reelsdownloader.data.engine.EngineException
 import dev.mrksvt.reelsdownloader.data.engine.EngineRequest
 import dev.mrksvt.reelsdownloader.domain.DownloadError
+import dev.mrksvt.reelsdownloader.domain.EngineKind
 import dev.mrksvt.reelsdownloader.domain.JobStatus
 import dev.mrksvt.reelsdownloader.domain.ResultType
 import dev.mrksvt.reelsdownloader.util.CrashReporter
@@ -47,7 +48,7 @@ class DownloadWorker(
     override suspend fun doWork(): Result = coroutineScope {
         val jobId = inputData.getString(KEY_JOB_ID) ?: return@coroutineScope Result.failure()
         val dao = container.database.downloadJobDao()
-        val engine = container.engine
+        val router = container.engineRouter
         val writer = container.mediaStoreWriter
 
         stage("worker:start $jobId")
@@ -59,6 +60,11 @@ class DownloadWorker(
         }
 
         val displayTitle = job.title ?: job.url
+        // Engine yang diminta lewat WorkManager; AUTO bisa berubah saat
+        // berjalan (router memutuskan cadangan atau tidak).
+        val kind = inputData.getString(KEY_ENGINE)
+            ?.let { name -> EngineKind.entries.firstOrNull { it.name == name } }
+            ?: job.engineEnum
         // Notifikasi progres bersifat best-effort: bila OEM menolak foreground
         // service, unduhan tetap harus jalan (FR-111 tidak boleh memblokir job).
         runCatching {
@@ -134,8 +140,13 @@ class DownloadWorker(
             acquired = true
             stage("worker:engine-download-start")
 
-            val result = engine.download(
-                EngineRequest(
+            // Catat percobaan ke-n sebelum mulai, supaya riwayat bisa
+            // menjelaskan berapa kali job ini dicoba.
+            dao.bumpAttempts(jobId, System.currentTimeMillis())
+
+            val routed = router.download(
+                kind = kind,
+                request = EngineRequest(
                     jobId = jobId,
                     url = job.url,
                     type = job.typeEnum,
@@ -143,8 +154,20 @@ class DownloadWorker(
                     bitrate = job.bitrateEnum,
                     maxSizeBytes = settings.maxSizeBytes,
                     workDir = workDir,
+                    mediaUrl = job.mediaUrl,
                 ),
             ) { event -> events.trySend(event) }
+            val result = routed.result
+
+            // Simpan engine yang benar-benar dipakai (AUTO bisa jatuh ke
+            // cadangan), sehingga entri riwayat jujur soal asalnya.
+            dao.updateSource(
+                id = jobId,
+                engine = routed.engine.name,
+                mediaUrl = job.mediaUrl,
+                mimeType = job.mimeType,
+                now = System.currentTimeMillis(),
+            )
 
             events.close()
             eventProcessor.join()
@@ -205,7 +228,7 @@ class DownloadWorker(
             withContext(NonCancellable) {
                 // Hentikan proses yt-dlp native; cancellable coroutine saja tidak
                 // cukup karena execute() memblokir thread IO.
-                runCatching { engine.cancel(jobId) }
+                runCatching { router.cancel(kind, jobId) }
                 markFinished(dao, jobId, JobStatus.CANCELLED, DownloadError.Cancelled)
                 DownloadNotifications.cancel(applicationContext, jobId)
             }
@@ -291,6 +314,9 @@ class DownloadWorker(
 
     companion object {
         const val KEY_JOB_ID = "job_id"
+
+        /** Engine yang diminta (A17). Tidak disimpan di DB sebelum job berjalan. */
+        const val KEY_ENGINE = "engine"
         const val KEY_ERROR = "error"
         private const val MAX_NAME_LENGTH = 80
         private val UNSAFE_CHARS = Regex("""[\\/:*?"<>|\n\r\t]""")
@@ -302,9 +328,14 @@ class DownloadWorker(
 /** Helper enqueue/cancel supaya UI tidak menyentuh WorkManager langsung. */
 object DownloadScheduler {
 
-    fun enqueue(context: Context, job: DownloadJobEntity) {
+    fun enqueue(context: Context, job: DownloadJobEntity, kind: EngineKind = EngineKind.AUTO) {
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
-            .setInputData(workDataOf(DownloadWorker.KEY_JOB_ID to job.id))
+            .setInputData(
+                workDataOf(
+                    DownloadWorker.KEY_JOB_ID to job.id,
+                    DownloadWorker.KEY_ENGINE to kind.name,
+                )
+            )
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)

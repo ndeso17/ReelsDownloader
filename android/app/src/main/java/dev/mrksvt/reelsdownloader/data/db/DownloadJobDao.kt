@@ -45,6 +45,21 @@ interface DownloadJobDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(job: DownloadJobEntity)
 
+    @Query(
+        "UPDATE download_jobs SET engine = :engine, mediaUrl = :mediaUrl, " +
+            "mimeType = :mimeType, updatedAt = :now WHERE id = :id"
+    )
+    suspend fun updateSource(
+        id: String,
+        engine: String?,
+        mediaUrl: String?,
+        mimeType: String?,
+        now: Long,
+    )
+
+    @Query("UPDATE download_jobs SET attempts = attempts + 1, updatedAt = :now WHERE id = :id")
+    suspend fun bumpAttempts(id: String, now: Long)
+
     @Query("DELETE FROM download_jobs WHERE id = :id")
     suspend fun deleteById(id: String)
 

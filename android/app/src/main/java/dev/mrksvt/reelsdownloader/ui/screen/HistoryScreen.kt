@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.mrksvt.reelsdownloader.R
 import dev.mrksvt.reelsdownloader.data.HistoryViewMode
 import dev.mrksvt.reelsdownloader.data.db.DownloadJobEntity
+import dev.mrksvt.reelsdownloader.domain.EngineKind
 import dev.mrksvt.reelsdownloader.domain.JobStatus
 import dev.mrksvt.reelsdownloader.domain.ResultType
 import dev.mrksvt.reelsdownloader.ui.components.ThumbnailCache
@@ -643,6 +644,20 @@ private fun SelectionCheck(checked: Boolean, modifier: Modifier = Modifier) {
 private fun subtitle(context: android.content.Context, job: DownloadJobEntity): String =
     buildString {
         append(job.platformEnum?.let { stringResource(it.labelRes) } ?: job.platform)
+        // Asal unduhan: hanya ditampilkan bila bukan jalur yt-dlp biasa (A17).
+        when (job.engineEnum) {
+            EngineKind.WEB -> {
+                append(" · ")
+                append(stringResource(R.string.engine_via_browser))
+            }
+
+            EngineKind.DIRECT -> {
+                append(" · ")
+                append(stringResource(R.string.engine_via_direct))
+            }
+
+            else -> Unit
+        }
         if (job.sizeBytes > 0) {
             append(" · ")
             append(Formatter.formatShortFileSize(context, job.sizeBytes))

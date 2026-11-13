@@ -15,6 +15,13 @@ data class EngineRequest(
     val bitrate: AudioBitrate,
     val maxSizeBytes: Long,
     val workDir: File,
+    /**
+     * URL media langsung untuk engine cadangan (A17).
+     *
+     * `null` berarti engine harus memakai [url] apa adanya (mis. yt-dlp yang
+     * memang menerima URL halaman).
+     */
+    val mediaUrl: String? = null,
 )
 
 /** Event streaming dari engine ke worker. */

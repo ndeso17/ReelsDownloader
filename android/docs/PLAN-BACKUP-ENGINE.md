@@ -182,3 +182,53 @@ Urutan: **A17-0 → A17-1 → A17-2 ∥ A17-5 → A17-3 → A17-4 → A17-6 → 
 - DRM (Widevine).
 - Login otomatis ke platform.
 - Integrasi ekstensi browser (tidak ada mekanisme native messaging di Android).
+
+---
+
+## 9. Hasil implementasi (2026-11-13)
+
+Semua WP A17-0 … A17-7 selesai dan terpasang di 0.1.7 (versionCode 8).
+49 test unit hijau; APK debug 66 MB, release 54 MB.
+
+### 9.1 Cara pakai
+
+1. Tempel URL di Home (Instagram/Facebook/YouTube) seperti biasa.
+2. Bila unduhan normal gagal, tekan **"Buka di browser bawaan"** di bawah tombol
+   Unduh — atau langsung tekan itu bila ingin memilih berkas sendiri.
+3. Putar videonya di browser mini. Setiap request media yang lewat ditangkap
+   (URL request + pemindaian DOM/`performance`), lalu muncul di panel bawah
+   beserta perkiraan ukuran.
+4. Tekan **Unduh** pada kandidat. Job masuk antrean WorkManager seperti unduhan
+   biasa, jadi tetap berjalan walau layar browser ditutup.
+5. Entri riwayat muncul dengan label **`via browser`** (atau `direct` untuk
+   engine cadangan non-WebView).
+
+### 9.2 Yang berubah dari rencana
+
+| Rencana | Kenyataan | Alasan |
+|---|---|---|
+| `MigrationTestHelper` | `sqlite-jdbc` di JVM | Tidak ada emulator di mesin build; DDL v1 disimpan di `src/test/resources/migration/` |
+| SQL migrasi ditulis di `AppDatabase` | `MigrationSql.V1_TO_V2` dipakai bersama prod + test | Test tidak bisa "lulus sendiri" bila SQL produksi berbeda |
+| `EngineRouter.lastUsed` | `RoutedResult(result, engine)` | Dua job berjalan bersamaan (semaphore 2) akan saling menimpa field bersama |
+| `engine` disimpan di DB saat enqueue | Engine yang diminta lewat WorkManager `KEY_ENGINE`; DB hanya diisi engine yang **benar-benar** dipakai | `AUTO` bukan engine nyata; menyimpannya membuat riwayat berbohong |
+| `DownloadSpec.engine` | `DownloadJobEntity.engine` + `DownloadRepository.start(engine=…)` | Menyesuaikan struktur yang sudah ada |
+
+### 9.3 Batasan yang tetap berlaku
+
+- **DASH `.mpd`** tidak didukung; hanya HLS `.m3u8` (di-remux FFmpeg bawaan).
+- **DRM (Widevine)** dan **login** tidak didukung.
+- Video yang diputar lewat **MSE/Blob** tidak menghasilkan URL yang bisa diunduh;
+  panel akan tetap kosong dan pengguna diberi pesan.
+- Halaman di luar 10 host yang didukung `UrlValidator` tidak bisa dibuka di
+  browser mini — aplikasi ini bukan browser umum.
+
+### 9.4 Verifikasi
+
+| Uji | Hasil |
+|---|---|
+| `MigrationTest` (6) | Baris lama utuh, kolom baru `NULL`/`DEFAULT 0`, bentuk kolom sesuai Room |
+| `EngineRouterTest` (13) | Fallback hanya untuk `DownloadFailed`/`UnsupportedUrl`/`NotFound`/`FfmpegFailed`/`InvalidUrl`; tidak untuk `Cancelled`/`Private` |
+| `MediaSnifferTest` (14) | `image/*` ditolak walau URL `.mp4`; HLS ditandai stream; `best()` memilih berkas utuh lebih dulu |
+| Mutasi | Menghapus `mimeType` dari `MigrationSql` → 3 test migrasi gagal |
+| Rilis | `MediaScanBridge.push` bertahan setelah R8 (diverifikasi lewat `dexdump`) |
+

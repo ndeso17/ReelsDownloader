@@ -32,6 +32,9 @@ nama platform (Instagram/Facebook/YouTube) TIDAK diterjemahkan.
     <string name="platform_instagram" translatable="false">Instagram</string>
     <string name="platform_facebook" translatable="false">Facebook</string>
     <string name="platform_youtube" translatable="false">YouTube</string>
+    <!-- Asal unduhan bila bukan lewat yt-dlp (A17). -->
+    <string name="engine_via_browser">via browser</string>
+    <string name="engine_via_direct">direct</string>
     <string name="home_quality_best">Best</string>
     <string name="home_quality_1080p">1080p</string>
     <string name="home_quality_720p">720p</string>
@@ -146,4 +149,22 @@ nama platform (Instagram/Facebook/YouTube) TIDAK diterjemahkan.
 
     <!-- Share sheet -->
     <string name="share_received">Link received from another app</string>
+
+    <!-- Browser mini (engine cadangan) -->
+    <string name="browser_title">Open in browser</string>
+    <string name="browser_hint">Play the video, then pick a file to download.</string>
+    <string name="browser_found">%1$d media found</string>
+    <string name="browser_none_yet">No media detected yet. Play the video and try again.</string>
+    <string name="browser_refresh">Scan again</string>
+    <string name="browser_download">Download</string>
+    <string name="browser_item_type_video">Video</string>
+    <string name="browser_item_type_audio">Audio</string>
+    <string name="browser_item_stream">stream</string>
+    <string name="browser_size_unknown">size unknown</string>
+    <string name="browser_queued">Added to downloads</string>
+    <string name="browser_untrusted">This page can\'t be opened here.</string>
+    <string name="browser_not_media">That link is not a media file.</string>
+    <string name="browser_open_from_app">Open in built-in browser</string>
+    <string name="browser_back">Back</string>
+    <string name="browser_close">Close</string>
 </resources>

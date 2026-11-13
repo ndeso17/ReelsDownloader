@@ -25,8 +25,8 @@ android {
         applicationId = "dev.mrksvt.reelsdownloader"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 8
+        versionName = "0.1.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -105,6 +105,12 @@ android {
         disable += "GradleDependency"
     }
 
+    // Skema Room di-export supaya migrasi bisa diuji (A17-0) dan perubahannya
+    // terlihat di diff, bukan tersembunyi.
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
+
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
@@ -135,6 +141,9 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Test migrasi Room berjalan di JVM memakai SQLite asli (bukan emulator),
+    // karena perangkat tidak bisa dipakai untuk `connectedAndroidTest` di sini.
+    testImplementation(libs.sqlite.jdbc)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

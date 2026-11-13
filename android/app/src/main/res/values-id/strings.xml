@@ -36,6 +36,10 @@ Nama platform (Instagram/Facebook/YouTube) dan emoji tidak diterjemahkan.
     <string name="home_bitrate_128">128 kbps</string>
     <string name="home_download">Unduh</string>
 
+    <!-- Asal unduhan bila bukan lewat yt-dlp (A17). -->
+    <string name="engine_via_browser">lewat browser</string>
+    <string name="engine_via_direct">langsung</string>
+
     <!-- Status job -->
     <string name="job_queued">Dalam antrean</string>
     <string name="job_downloading">Mengunduh %1$d%%</string>
@@ -140,4 +144,22 @@ Nama platform (Instagram/Facebook/YouTube) dan emoji tidak diterjemahkan.
 
     <!-- Share sheet -->
     <string name="share_received">Tautan diterima dari aplikasi lain</string>
+
+    <!-- Browser mini (engine cadangan) -->
+    <string name="browser_title">Buka di browser</string>
+    <string name="browser_hint">Putar videonya, lalu pilih berkas yang ingin diunduh.</string>
+    <string name="browser_found">%1$d media ditemukan</string>
+    <string name="browser_none_yet">Belum ada media terdeteksi. Putar videonya lalu coba lagi.</string>
+    <string name="browser_refresh">Pindai ulang</string>
+    <string name="browser_download">Unduh</string>
+    <string name="browser_item_type_video">Video</string>
+    <string name="browser_item_type_audio">Audio</string>
+    <string name="browser_item_stream">stream</string>
+    <string name="browser_size_unknown">ukuran tidak diketahui</string>
+    <string name="browser_queued">Ditambahkan ke unduhan</string>
+    <string name="browser_untrusted">Halaman ini tidak bisa dibuka di sini.</string>
+    <string name="browser_not_media">Tautan itu bukan berkas media.</string>
+    <string name="browser_open_from_app">Buka di browser bawaan</string>
+    <string name="browser_back">Kembali</string>
+    <string name="browser_close">Tutup</string>
 </resources>

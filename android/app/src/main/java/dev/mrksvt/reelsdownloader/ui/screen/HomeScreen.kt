@@ -51,6 +51,7 @@ import dev.mrksvt.reelsdownloader.data.db.DownloadJobEntity
 import dev.mrksvt.reelsdownloader.domain.AudioBitrate
 import dev.mrksvt.reelsdownloader.domain.Quality
 import dev.mrksvt.reelsdownloader.domain.ResultType
+import dev.mrksvt.reelsdownloader.domain.UrlValidator
 import dev.mrksvt.reelsdownloader.ui.components.JobCard
 import dev.mrksvt.reelsdownloader.ui.vm.HomeUiState
 import dev.mrksvt.reelsdownloader.ui.vm.HomeViewModel
@@ -197,6 +198,39 @@ private fun UrlInputCard(
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.home_download))
+            }
+
+            // Jalur cadangan (A17): buka halaman di WebView, lalu unduh berkas
+            // media yang tertangkap. Hanya muncul saat URL sudah valid.
+            if (state.platform != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.browser_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = {
+                        val target = UrlValidator.validate(state.url)
+                        if (target is UrlValidator.ValidationResult.Valid) {
+                            context.startActivity(
+                                android.content.Intent(
+                                    context,
+                                    dev.mrksvt.reelsdownloader.BrowserActivity::class.java,
+                                ).putExtra(
+                                    dev.mrksvt.reelsdownloader.BrowserActivity.EXTRA_URL,
+                                    target.url,
+                                )
+                            )
+                        }
+                    }) {
+                        Text(stringResource(R.string.browser_open_from_app))
+                    }
+                }
             }
         }
     }

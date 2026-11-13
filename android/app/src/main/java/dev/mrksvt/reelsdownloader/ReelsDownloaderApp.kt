@@ -5,7 +5,9 @@ import dev.mrksvt.reelsdownloader.data.DownloadRepository
 import dev.mrksvt.reelsdownloader.data.MediaStoreWriter
 import dev.mrksvt.reelsdownloader.data.SettingsRepository
 import dev.mrksvt.reelsdownloader.data.db.AppDatabase
+import dev.mrksvt.reelsdownloader.data.engine.DirectHttpEngine
 import dev.mrksvt.reelsdownloader.data.engine.DownloadEngine
+import dev.mrksvt.reelsdownloader.data.engine.EngineRouter
 import dev.mrksvt.reelsdownloader.data.engine.YtDlpEngine
 import dev.mrksvt.reelsdownloader.util.CrashReporter
 import dev.mrksvt.reelsdownloader.worker.DownloadNotifications
@@ -24,6 +26,11 @@ class AppContainer(private val app: Application) {
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(app) }
 
     val engine: DownloadEngine by lazy { YtDlpEngine(app) }
+
+    /** Engine cadangan: unduh langsung dari URL media (A17). */
+    val directEngine: DownloadEngine by lazy { DirectHttpEngine(app) }
+
+    val engineRouter: EngineRouter by lazy { EngineRouter(engine, directEngine) }
 
     val mediaStoreWriter: MediaStoreWriter by lazy { MediaStoreWriter(app) }
 

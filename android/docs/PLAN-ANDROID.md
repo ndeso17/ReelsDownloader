@@ -60,20 +60,24 @@ menulis dokumen rencana.
 | A14 | Build rilis + GitHub Release | `assembleRelease` signed (arm64-v8a, R8), APK ≤ 60 MB, tag `android-vX.Y.Z`, upload artefak + `RELEASE-NOTES.md` via `gh` | Install dari halaman Releases | A13 |
 | A15 | CI | GitHub Actions: `./gradlew test`, cache Gradle, build debug APK pada PR | Workflow hijau | A1 |
 | A16 | Dokumentasi | `android/README.md` (instalasi APK, izin, troubleshooting, cara rilis), update `README.md` root | Review manusia | A14 |
+| A17 | Engine cadangan | `EngineRouter` (AUTO → yt-dlp → cadangan), `DirectHttpEngine` (HTTP dengan resume/retry), `Remux` (HLS via FFmpeg bawaan), browser mini WebView + `MediaSniffer`, migrasi Room v1→v2 non-destruktif. Rincian: [`PLAN-BACKUP-ENGINE.md`](PLAN-BACKUP-ENGINE.md) | JUnit (`EngineRouterTest` 13, `MediaSnifferTest` 14, `MigrationTest` 6) + manual di HP | A4, A6 |
 
 Urutan eksekusi: **A0 → A1 → A2 ∥ A3 → A4 → A5 ∥ A6 → A7 → A8 ∥ A10 → A9 → A11 → A12 → A13 → A15 → A14 → A16.**
 
 (CI A15 didahulukan dari rilis A14 supaya release build punya gerbang otomatis.)
 
-### 1.1 Status eksekusi (2026-10-29)
+### 1.1 Status eksekusi (2026-11-13)
 
 | WP | Status | Bukti |
 |---|---|---|
 | A0 | **Sebagian** | Library `io.github.junkfood02.youtubedl-android:0.18.1` (Maven Central) + `ffmpeg` terpasang dan build sukses. Sisa: unduhan nyata di HP arm64 (tidak bisa diotomasi dari mesin build) |
-| A1 | **Selesai** | `assembleDebug` 77 MB, `assembleRelease` 53 MB signed `CN=mrksvt`; `apksigner verify` OK |
+| A1 | **Selesai** | `assembleDebug` 66 MB, `assembleRelease` 54 MB signed; `apksigner verify` OK |
 | A2 | **Sebagian** | Adaptive icon (v26 + v33 monochrome), legacy mipmap 5 densitas, splash, `colors.xml` sudah dibuat. Sisa: verifikasi visual di emulator API 26/30/33/35 |
-| A12 | **Sebagian** | `values/strings.xml` (80) + `values-id/strings.xml` (79) + `crowdin.yml` + `locales_config.xml` sudah ada. Sisa: audit `lint` setelah UI jadi |
-| A3-A11, A13-A16 | Belum | - |
+| A3-A13 | **Selesai** | Domain, Room, `YtDlpEngine`, `MediaStoreWriter`, worker + notifikasi, Home/History/Settings, i18n en+id. 42 test unit hijau |
+| A14 | **Sebagian** | `assembleRelease` signed 54 MB, `keystore/` gitignored. Sisa: tag + unggah ke GitHub Releases |
+| A15 | Belum | `.github/` masih di-`.gitignore` (lihat B1) |
+| A16 | **Sebagian** | `android/docs/` lengkap; `README.md` root sudah menunjuk dokumen ini |
+| A17 | **Selesai (kode)** | Engine cadangan + browser mini; 49 test hijau (`MigrationTest` 6, `EngineRouterTest` 13, `MediaSnifferTest` 14, `UrlValidatorTest` 6, `AppIconsTest` 3, `HistorySelectionTest` 7). Sisa: uji unduhan nyata di HP |
 
 ---
 

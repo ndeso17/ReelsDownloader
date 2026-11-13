@@ -14,5 +14,12 @@
 -keep class * extends androidx.work.ListenableWorker { *; }
 -keep class * extends androidx.work.WorkerFactory { *; }
 
+# WebView memanggil metode @JavascriptInterface lewat refleksi dari JavaScript.
+# Tanpa aturan ini, R8 menghapus `push()` dan pemindaian DOM diam-diam berhenti
+# bekerja hanya pada build release.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
 -dontwarn org.apache.commons.**
 -dontwarn com.fasterxml.jackson.**

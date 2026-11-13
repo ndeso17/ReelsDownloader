@@ -41,6 +41,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Browser mini untuk engine cadangan (A17-6). -->
+        <activity
+            android:name=".BrowserActivity"
+            android:exported="false"
+            android:label="@string/browser_title"
+            android:theme="@style/Theme.ReelsDownloader" />
+
         <!-- WorkManager foreground service untuk progres unduhan (NFR-102). -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

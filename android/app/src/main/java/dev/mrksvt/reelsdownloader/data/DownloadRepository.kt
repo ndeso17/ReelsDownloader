@@ -8,6 +8,7 @@ import dev.mrksvt.reelsdownloader.domain.JobStatus
 import dev.mrksvt.reelsdownloader.domain.Platform
 import dev.mrksvt.reelsdownloader.domain.Quality
 import dev.mrksvt.reelsdownloader.domain.AudioBitrate
+import dev.mrksvt.reelsdownloader.domain.EngineKind
 import dev.mrksvt.reelsdownloader.domain.ResultType
 import dev.mrksvt.reelsdownloader.worker.DownloadScheduler
 import kotlinx.coroutines.flow.Flow
@@ -24,14 +25,26 @@ class DownloadRepository(
     val history: Flow<List<DownloadJobEntity>> = dao.observeHistory()
     val allJobs: Flow<List<DownloadJobEntity>> = dao.observeAll()
 
+    /**
+     * Buat job baru dan antrekan (FR-107).
+     *
+     * @param engine engine yang diminta; `AUTO` mencoba yt-dlp lalu cadangan.
+     * @param mediaUrl URL media langsung bila sudah diketahui (mis. dari browser
+     *   mini) — dipakai engine cadangan tanpa perlu menebak dari halaman.
+     * @param mimeType MIME hasil deteksi, untuk menentukan jenis simpanan.
+     */
     suspend fun start(
         url: String,
         platform: Platform,
         type: ResultType,
         quality: Quality,
         bitrate: AudioBitrate,
+        engine: EngineKind = EngineKind.AUTO,
+        mediaUrl: String? = null,
+        mimeType: String? = null,
     ): String {
         val jobId = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
         val job = DownloadJobEntity(
             id = jobId,
             url = url,
@@ -40,11 +53,16 @@ class DownloadRepository(
             requestedQuality = quality.name,
             requestedBitrate = bitrate.name,
             status = JobStatus.QUEUED.name,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis(),
+            createdAt = now,
+            updatedAt = now,
+            mediaUrl = mediaUrl,
+            mimeType = mimeType,
+            // AUTO tidak disimpan apa adanya: worker mengisi engine yang
+            // benar-benar dipakai lewat updateSource().
+            engine = null,
         )
         dao.upsert(job)
-        DownloadScheduler.enqueue(appContext, job)
+        DownloadScheduler.enqueue(appContext, job, engine)
         return jobId
     }
 
@@ -66,7 +84,9 @@ class DownloadRepository(
             updatedAt = System.currentTimeMillis(),
         )
         dao.upsert(fresh)
-        DownloadScheduler.enqueue(appContext, fresh)
+        // Pakai AUTO lagi: job yang tadinya jatuh ke engine cadangan tetap
+        // mendapat kesempatan dicoba lewat yt-dlp (mis. setelah pembaruan).
+        DownloadScheduler.enqueue(appContext, fresh, EngineKind.AUTO)
     }
 
     /** Hapus entri riwayat sekaligus file di galeri (FR-112). */
