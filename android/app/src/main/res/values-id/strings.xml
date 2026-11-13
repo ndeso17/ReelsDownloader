@@ -23,6 +23,9 @@ Nama platform (Instagram/Facebook/YouTube) dan emoji tidak diterjemahkan.
     <string name="home_type_video">🎬 Video</string>
     <string name="home_type_audio">🎵 Audio</string>
     <string name="home_quality_label">Kualitas</string>
+    <string name="home_bitrate_label">Bitrate</string>
+    <string name="section_active">Sedang berjalan</string>
+    <string name="disclaimer_short">Unduh hanya konten yang berhak Anda gunakan. Hanya tautan publik.</string>
     <string name="home_quality_best">Terbaik</string>
     <string name="home_quality_1080p">1080p</string>
     <string name="home_quality_720p">720p</string>
@@ -55,6 +58,23 @@ Nama platform (Instagram/Facebook/YouTube) dan emoji tidak diterjemahkan.
     <string name="history_delete_body">File akan dihapus dari penyimpanan perangkat Anda.</string>
     <string name="history_open_folder">Buka folder</string>
     <string name="history_size">%1$s</string>
+    <string name="history_meta">%1$s · %2$s · %3$s</string>
+    <string name="history_count">%1$d item</string>
+    <string name="history_clear_failed">Hapus yang gagal (%1$d)</string>
+    <string name="history_clear_all">Hapus semua</string>
+    <string name="history_more">Opsi lainnya</string>
+    <string name="history_clear_all_confirm">Hapus seluruh riwayat dan hapus semua file unduhan dari penyimpanan? Tindakan ini tidak bisa dibatalkan.</string>
+    <string name="history_forget">Hapus dari riwayat</string>
+    <string name="history_delete_file_only">Hapus file saja</string>
+    <string name="history_delete_with_file">Hapus riwayat + file</string>
+    <string name="history_delete_with_file_confirm">Hapus entri ini dari riwayat dan hapus filenya dari perangkat? Tindakan ini tidak bisa dibatalkan.</string>
+    <string name="history_removed_from_history">Dihapus dari riwayat</string>
+    <string name="history_removed_with_file">Riwayat dan file dihapus</string>
+    <string name="history_file_deleted">File dihapus dari penyimpanan</string>
+    <string name="history_delete_failed_msg">Gagal menghapus file</string>
+    <string name="history_removed_failed">%1$d entri gagal dihapus</string>
+    <string name="history_removed_all">%1$d entri dihapus</string>
+    <string name="history_retried">Unduhan dimulai ulang</string>
 
     <!-- Notifikasi -->
     <string name="channel_download_name">Unduhan</string>
@@ -78,6 +98,10 @@ Nama platform (Instagram/Facebook/YouTube) dan emoji tidak diterjemahkan.
     <string name="err_engine_missing">⚙️ Mesin unduh belum siap. Buka Pengaturan untuk memasangnya.</string>
 
     <!-- Pengaturan -->
+    <string name="settings_defaults">Opsi bawaan</string>
+    <string name="settings_engine">Mesin unduh</string>
+    <string name="settings_engine_version_value">yt-dlp %1$s</string>
+    <string name="settings_engine_unknown">Mesin belum siap</string>
     <string name="settings_quality_default">Kualitas bawaan</string>
     <string name="settings_type_default">Jenis hasil bawaan</string>
     <string name="settings_max_size">Ukuran file maksimum (MB)</string>

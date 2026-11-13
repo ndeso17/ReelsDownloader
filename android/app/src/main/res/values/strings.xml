@@ -24,6 +24,14 @@ nama platform (Instagram/Facebook/YouTube) TIDAK diterjemahkan.
     <string name="home_type_video">🎬 Video</string>
     <string name="home_type_audio">🎵 Audio</string>
     <string name="home_quality_label">Quality</string>
+    <string name="home_bitrate_label">Bitrate</string>
+    <string name="section_active">In progress</string>
+    <string name="disclaimer_short">Only download content you have the right to use. Public links only.</string>
+
+    <!-- Platforms (tidak diterjemahkan) -->
+    <string name="platform_instagram" translatable="false">Instagram</string>
+    <string name="platform_facebook" translatable="false">Facebook</string>
+    <string name="platform_youtube" translatable="false">YouTube</string>
     <string name="home_quality_best">Best</string>
     <string name="home_quality_1080p">1080p</string>
     <string name="home_quality_720p">720p</string>
@@ -56,6 +64,23 @@ nama platform (Instagram/Facebook/YouTube) TIDAK diterjemahkan.
     <string name="history_delete_body">The file will be removed from your device storage.</string>
     <string name="history_open_folder">Open folder</string>
     <string name="history_size">%1$s</string>
+    <string name="history_meta">%1$s · %2$s · %3$s</string>
+    <string name="history_count">%1$d items</string>
+    <string name="history_clear_failed">Clear failed (%1$d)</string>
+    <string name="history_clear_all">Clear all</string>
+    <string name="history_more">More options</string>
+    <string name="history_clear_all_confirm">Remove every history entry and delete all downloaded files from your device storage? This cannot be undone.</string>
+    <string name="history_forget">Remove from history</string>
+    <string name="history_delete_file_only">Delete file only</string>
+    <string name="history_delete_with_file">Delete history + file</string>
+    <string name="history_delete_with_file_confirm">Delete this entry from history and remove the file from your device? This cannot be undone.</string>
+    <string name="history_removed_from_history">Removed from history</string>
+    <string name="history_removed_with_file">History and file deleted</string>
+    <string name="history_file_deleted">File deleted from storage</string>
+    <string name="history_delete_failed_msg">Could not delete the file</string>
+    <string name="history_removed_failed">%1$d failed entries removed</string>
+    <string name="history_removed_all">%1$d entries removed</string>
+    <string name="history_retried">Download restarted</string>
 
     <!-- Notifications -->
     <string name="channel_download_name">Downloads</string>
@@ -79,6 +104,10 @@ nama platform (Instagram/Facebook/YouTube) TIDAK diterjemahkan.
     <string name="err_engine_missing">⚙️ Download engine is not ready. Open Settings to install it.</string>
 
     <!-- Settings -->
+    <string name="settings_defaults">Default options</string>
+    <string name="settings_engine">Download engine</string>
+    <string name="settings_engine_version_value">yt-dlp %1$s</string>
+    <string name="settings_engine_unknown">Engine not ready yet</string>
     <string name="settings_quality_default">Default quality</string>
     <string name="settings_type_default">Default result type</string>
     <string name="settings_max_size">Maximum file size (MB)</string>

@@ -25,8 +25,8 @@ android {
         applicationId = "dev.mrksvt.reelsdownloader"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 6
+        versionName = "0.1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -74,6 +74,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     // Locale config dibuat manual via res/xml/locales_config.xml (lihat AndroidManifest).
@@ -89,7 +90,12 @@ android {
             )
         }
         jniLibs {
-            useLegacyPackaging = false
+            // youtubedl-android meng-`exec` libpython/libffmpeg langsung dari
+            // ApplicationInfo.nativeLibraryDir. Dengan packAging default AGP 8.x
+            // (extractNativeLibs=false), path itu TIDAK ada di disk sehingga
+            // YoutubeDL.init() gagal "failed to initialize". Legacy packaging
+            // memaksa .so diekstrak ke nativeLibraryDir saat install.
+            useLegacyPackaging = true
         }
     }
 
@@ -120,10 +126,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material.icons.extended)
-    debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.youtubedl.android)
     implementation(libs.youtubedl.ffmpeg)
